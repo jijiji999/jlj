@@ -1,0 +1,1 @@
+SUBSYSTEM=="tty", ATTRS{idVendor}=="6877", ATTRS{idProduct}=="4d55", ATTRS{serial}=="DMIMU20250212", SYMLINK+="dm_imu", GROUP="dialout", MODE="0660"

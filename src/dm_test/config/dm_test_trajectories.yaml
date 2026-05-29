@@ -1,0 +1,205 @@
+motor_config_path: package://dm_motor/config/dm_motor_29.yaml
+
+groups:
+  left_arm:
+    joints:
+      - left_shoulder_pitch
+      - left_shoulder_roll
+      - left_shoulder_yaw
+      - left_elbow
+      - left_wrist_roll
+      - left_wrist_pitch
+      - left_wrist_yaw
+    default_kp: 22.0
+    default_kd: 0.9
+    joint_gains:
+      left_shoulder_pitch: {kp: 30.0, kd: 1.2}
+      left_shoulder_roll: {kp: 28.0, kd: 1.1}
+      left_shoulder_yaw: {kp: 24.0, kd: 1.0}
+      left_elbow: {kp: 22.0, kd: 0.9}
+      left_wrist_roll: {kp: 12.0, kd: 0.4}
+      left_wrist_pitch: {kp: 12.0, kd: 0.4}
+      left_wrist_yaw: {kp: 10.0, kd: 0.35}
+
+  right_arm:
+    joints:
+      - right_shoulder_pitch
+      - right_shoulder_roll
+      - right_shoulder_yaw
+      - right_elbow
+      - right_wrist_roll
+      - right_wrist_pitch
+      - right_wrist_yaw
+    default_kp: 22.0
+    default_kd: 0.9
+    joint_gains:
+      right_shoulder_pitch: {kp: 30.0, kd: 1.2}
+      right_shoulder_roll: {kp: 28.0, kd: 1.1}
+      right_shoulder_yaw: {kp: 24.0, kd: 1.0}
+      right_elbow: {kp: 22.0, kd: 0.9}
+      right_wrist_roll: {kp: 12.0, kd: 0.4}
+      right_wrist_pitch: {kp: 12.0, kd: 0.4}
+      right_wrist_yaw: {kp: 10.0, kd: 0.35}
+
+  left_leg:
+    joints:
+      - left_hip_pitch
+      - left_hip_roll
+      - left_hip_yaw
+      - left_knee
+      - left_ankle_pitch
+      - left_ankle_roll
+    default_kp: 40.0
+    default_kd: 1.5
+
+  right_leg:
+    joints:
+      - right_hip_pitch
+      - right_hip_roll
+      - right_hip_yaw
+      - right_knee
+      - right_ankle_pitch
+      - right_ankle_roll
+    default_kp: 40.0
+    default_kd: 1.5
+
+  waist:
+    joints:
+      - waist_yaw
+      - waist_roll
+      - waist_pitch
+    default_kp: 35.0
+    default_kd: 1.2
+
+  whole_body:
+    joints:
+      - waist_yaw
+      - waist_roll
+      - waist_pitch
+      - left_shoulder_pitch
+      - left_shoulder_roll
+      - left_shoulder_yaw
+      - left_elbow
+      - left_wrist_roll
+      - left_wrist_pitch
+      - left_wrist_yaw
+      - right_shoulder_pitch
+      - right_shoulder_roll
+      - right_shoulder_yaw
+      - right_elbow
+      - right_wrist_roll
+      - right_wrist_pitch
+      - right_wrist_yaw
+      - left_hip_pitch
+      - left_hip_roll
+      - left_hip_yaw
+      - left_knee
+      - left_ankle_pitch
+      - left_ankle_roll
+      - right_hip_pitch
+      - right_hip_roll
+      - right_hip_yaw
+      - right_knee
+      - right_ankle_pitch
+      - right_ankle_roll
+    default_kp: 25.0
+    default_kd: 1.0
+
+trajectories:
+  left_arm_small_range:
+    group: left_arm
+    loop: true
+    description: Small safe left-arm motion for follow-up verification around the current pose.
+    points:
+      - time_from_start: 0.0
+        offsets:
+          left_shoulder_pitch: 0.0
+          left_shoulder_roll: 0.0
+          left_shoulder_yaw: 0.0
+          left_elbow: 0.0
+          left_wrist_roll: 0.0
+          left_wrist_pitch: 0.0
+          left_wrist_yaw: 0.0
+      - time_from_start: 1.2
+        offsets:
+          left_shoulder_pitch: 0.10
+          left_shoulder_roll: 0.05
+          left_shoulder_yaw: -0.05
+          left_elbow: 0.12
+          left_wrist_pitch: 0.03
+      - time_from_start: 2.6
+        offsets:
+          left_shoulder_pitch: -0.05
+          left_shoulder_roll: 0.02
+          left_shoulder_yaw: 0.04
+          left_elbow: 0.06
+          left_wrist_roll: 0.03
+          left_wrist_pitch: -0.02
+          left_wrist_yaw: 0.02
+      - time_from_start: 4.0
+        offsets:
+          left_shoulder_pitch: 0.08
+          left_shoulder_roll: -0.03
+          left_shoulder_yaw: 0.00
+          left_elbow: -0.04
+          left_wrist_roll: -0.02
+          left_wrist_pitch: 0.02
+          left_wrist_yaw: -0.02
+      - time_from_start: 5.2
+        offsets:
+          left_shoulder_pitch: 0.0
+          left_shoulder_roll: 0.0
+          left_shoulder_yaw: 0.0
+          left_elbow: 0.0
+          left_wrist_roll: 0.0
+          left_wrist_pitch: 0.0
+          left_wrist_yaw: 0.0
+
+  right_arm_small_range:
+    group: right_arm
+    loop: true
+    description: Small safe right-arm motion for follow-up verification around the current pose.
+    points:
+      - time_from_start: 0.0
+        offsets:
+          right_shoulder_pitch: 0.0
+          right_shoulder_roll: 0.0
+          right_shoulder_yaw: 0.0
+          right_elbow: 0.0
+          right_wrist_roll: 0.0
+          right_wrist_pitch: 0.0
+          right_wrist_yaw: 0.0
+      - time_from_start: 1.2
+        offsets:
+          right_shoulder_pitch: 0.10
+          right_shoulder_roll: -0.05
+          right_shoulder_yaw: 0.05
+          right_elbow: 0.12
+          right_wrist_pitch: 0.03
+      - time_from_start: 2.6
+        offsets:
+          right_shoulder_pitch: -0.05
+          right_shoulder_roll: -0.02
+          right_shoulder_yaw: -0.04
+          right_elbow: 0.06
+          right_wrist_roll: -0.03
+          right_wrist_pitch: -0.02
+          right_wrist_yaw: -0.02
+      - time_from_start: 4.0
+        offsets:
+          right_shoulder_pitch: 0.08
+          right_shoulder_roll: 0.03
+          right_shoulder_yaw: 0.00
+          right_elbow: -0.04
+          right_wrist_roll: 0.02
+          right_wrist_pitch: 0.02
+          right_wrist_yaw: 0.02
+      - time_from_start: 5.2
+        offsets:
+          right_shoulder_pitch: 0.0
+          right_shoulder_roll: 0.0
+          right_shoulder_yaw: 0.0
+          right_elbow: 0.0
+          right_wrist_roll: 0.0
+          right_wrist_pitch: 0.0
+          right_wrist_yaw: 0.0

@@ -1,0 +1,230 @@
+controller:
+  motor_config_path: ../../dm_motor/config/dm_motor_29.yaml
+  joy_topic: joy
+  imu_topic: imu/data
+  mode_topic: humanoid_control/mode
+  control_hz: 100.0
+  command_timeout_ms: 5
+  rx_poll_timeout_ms: 0
+  auto_enable_on_start: true
+  auto_disable_on_shutdown: true
+  publish_policy_debug_topics: true
+  startup_mode: passive
+
+  joystick:
+    fixed_button: 0
+    passive_button: 1
+    dance_button: 2
+    loco_button: 3
+    linear_x_axis: 1
+    linear_y_axis: 0
+    yaw_axis: 3
+    linear_x_scale: 0.6
+    linear_y_scale: 0.25
+    yaw_scale: 1.0
+    linear_x_sign: -1.0
+    linear_y_sign: 1.0
+    yaw_sign: 1.0
+
+  fixed_mode:
+    kp: 80.0
+    kd: 2.0
+
+  passive_mode:
+    kp: 0.0
+    kd: 0.2
+
+  loco_mode:
+    kp: 40.0
+    kd: 1.0
+    action_scale: 0.25
+    action_offset: 0.0
+    action_clip: 1.0
+
+  dance_mode:
+    kp: 50.0
+    kd: 1.0
+
+  policy:
+    model_path: policies/loco_policy.onnx
+    input_name: ""
+    output_name: ""
+    expected_observation_dim: 96
+    expected_action_dim: 29
+    angular_velocity_scale: 1.0
+    gravity_scale: 1.0
+    command_scale: 1.0
+    joint_position_scale: 1.0
+    joint_velocity_scale: 1.0
+    previous_action_scale: 1.0
+
+  policy_joint_order:
+    - waist_yaw
+    - waist_roll
+    - waist_pitch
+    - left_shoulder_pitch
+    - left_shoulder_roll
+    - left_shoulder_yaw
+    - left_elbow
+    - left_wrist_roll
+    - left_wrist_pitch
+    - left_wrist_yaw
+    - right_shoulder_pitch
+    - right_shoulder_roll
+    - right_shoulder_yaw
+    - right_elbow
+    - right_wrist_roll
+    - right_wrist_pitch
+    - right_wrist_yaw
+    - left_hip_pitch
+    - left_hip_roll
+    - left_hip_yaw
+    - left_knee
+    - left_ankle_pitch
+    - left_ankle_roll
+    - right_hip_pitch
+    - right_hip_roll
+    - right_hip_yaw
+    - right_knee
+    - right_ankle_pitch
+    - right_ankle_roll
+
+joints:
+  - name: waist_yaw
+    initial_position: 0.0
+    fixed_kp: 90.0
+    fixed_kd: 2.5
+    passive_kp: 0.0
+    passive_kd: 0.2
+    loco_kp: 70.0
+    loco_kd: 1.6
+    dance_kp: 80.0
+    dance_kd: 2.0
+    action_scale: 0.18
+    action_offset: 0.0
+  - name: waist_roll
+    initial_position: 0.0
+    action_scale: 0.12
+  - name: waist_pitch
+    initial_position: 0.0
+    action_scale: 0.15
+  - name: left_shoulder_pitch
+    initial_position: 0.0
+    fixed_kp: 60.0
+    fixed_kd: 1.5
+    loco_kp: 25.0
+    loco_kd: 0.8
+    action_scale: 0.10
+  - name: left_shoulder_roll
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: left_shoulder_yaw
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: left_elbow
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: left_wrist_roll
+    initial_position: 0.0
+    fixed_kp: 40.0
+    fixed_kd: 1.0
+    passive_kd: 0.1
+    loco_kp: 15.0
+    loco_kd: 0.5
+    action_scale: 0.06
+  - name: left_wrist_pitch
+    initial_position: 0.0
+    action_scale: 0.06
+  - name: left_wrist_yaw
+    initial_position: 0.0
+    action_scale: 0.06
+  - name: right_shoulder_pitch
+    initial_position: 0.0
+    fixed_kp: 60.0
+    fixed_kd: 1.5
+    loco_kp: 25.0
+    loco_kd: 0.8
+    action_scale: 0.10
+  - name: right_shoulder_roll
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: right_shoulder_yaw
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: right_elbow
+    initial_position: 0.0
+    action_scale: 0.10
+  - name: right_wrist_roll
+    initial_position: 0.0
+    fixed_kp: 40.0
+    fixed_kd: 1.0
+    passive_kd: 0.1
+    loco_kp: 15.0
+    loco_kd: 0.5
+    action_scale: 0.06
+  - name: right_wrist_pitch
+    initial_position: 0.0
+    action_scale: 0.06
+  - name: right_wrist_yaw
+    initial_position: 0.0
+    action_scale: 0.06
+  - name: left_hip_pitch
+    initial_position: 0.0
+    fixed_kp: 100.0
+    fixed_kd: 3.0
+    loco_kp: 75.0
+    loco_kd: 2.0
+    action_scale: 0.32
+  - name: left_hip_roll
+    initial_position: 0.0
+    action_scale: 0.20
+  - name: left_hip_yaw
+    initial_position: 0.0
+    action_scale: 0.18
+  - name: left_knee
+    initial_position: 0.0
+    fixed_kp: 110.0
+    fixed_kd: 3.0
+    loco_kp: 85.0
+    loco_kd: 2.2
+    action_scale: 0.34
+  - name: left_ankle_pitch
+    initial_position: 0.0
+    fixed_kp: 70.0
+    fixed_kd: 2.0
+    loco_kp: 45.0
+    loco_kd: 1.4
+    action_scale: 0.18
+  - name: left_ankle_roll
+    initial_position: 0.0
+    action_scale: 0.12
+  - name: right_hip_pitch
+    initial_position: 0.0
+    fixed_kp: 100.0
+    fixed_kd: 3.0
+    loco_kp: 75.0
+    loco_kd: 2.0
+    action_scale: 0.32
+  - name: right_hip_roll
+    initial_position: 0.0
+    action_scale: 0.20
+  - name: right_hip_yaw
+    initial_position: 0.0
+    action_scale: 0.18
+  - name: right_knee
+    initial_position: 0.0
+    fixed_kp: 110.0
+    fixed_kd: 3.0
+    loco_kp: 85.0
+    loco_kd: 2.2
+    action_scale: 0.34
+  - name: right_ankle_pitch
+    initial_position: 0.0
+    fixed_kp: 70.0
+    fixed_kd: 2.0
+    loco_kp: 45.0
+    loco_kd: 1.4
+    action_scale: 0.18
+  - name: right_ankle_roll
+    initial_position: 0.0
+    action_scale: 0.12

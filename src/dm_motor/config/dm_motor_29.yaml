@@ -1,0 +1,305 @@
+interfaces:
+  - name: vcan0
+    use_can_fd: true
+    bitrate_switch: true
+  - name: vcan1
+    use_can_fd: true
+    bitrate_switch: true
+  - name: vcan2
+    use_can_fd: true
+    bitrate_switch: true
+  - name: vcan3
+    use_can_fd: true
+    bitrate_switch: true
+
+defaults:
+  model: unknown
+  master_id: 0x10
+
+motors:
+  - name: waist_yaw
+    interface: vcan0
+    can_id: 0x01
+    master_id: 0x11
+    model: "10010"
+    notes: torso
+    upper_position_limit: 3.140
+    lower_position_limit: -3.140
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: waist_roll
+    interface: vcan1
+    can_id: 0x01
+    master_id: 0x11
+    model: "8009P"
+    notes: torso
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: waist_pitch
+    interface: vcan1
+    can_id: 0x02
+    master_id: 0x12
+    model: "8009P"
+    notes: torso
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: left_shoulder_pitch
+    interface: vcan0
+    can_id: 0x02
+    master_id: 0x12
+    model: "8009P"
+    notes: left_arm
+    upper_position_limit: 1.460
+    lower_position_limit: -3.420
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: left_shoulder_roll
+    interface: vcan0
+    can_id: 0x03
+    master_id: 0x13
+    model: "8009P"
+    notes: left_arm
+    upper_position_limit: 0.160
+    lower_position_limit: -3.140
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: left_shoulder_yaw
+    interface: vcan0
+    can_id: 0x04
+    master_id: 0x14
+    model: "4340P"
+    notes: left_arm
+    upper_position_limit: 1.499
+    lower_position_limit: -1.669
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: left_elbow
+    interface: vcan0
+    can_id: 0x05
+    master_id: 0x15
+    model: "4340"
+    notes: left_arm
+    upper_position_limit: 0.990
+    lower_position_limit: -1.440
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: left_wrist_roll
+    interface: vcan0
+    can_id: 0x06
+    master_id: 0x16
+    model: "4310"
+    notes: left_arm
+    upper_position_limit: 1.404
+    lower_position_limit: -1.739
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: left_wrist_pitch
+    interface: vcan0
+    can_id: 0x07
+    master_id: 0x17
+    model: "4310"
+    notes: left_arm
+    upper_position_limit: 0.709
+    lower_position_limit: -0.862
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: left_wrist_yaw
+    interface: vcan0
+    can_id: 0x08
+    master_id: 0x18
+    model: "4310"
+    notes: left_arm
+    upper_position_limit: 1.691
+    lower_position_limit: -1.453
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: right_shoulder_pitch
+    interface: vcan1
+    can_id: 0x03
+    master_id: 0x13
+    model: "8009P"
+    notes: right_arm
+    upper_position_limit: 3.488
+    lower_position_limit: -1.374
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: right_shoulder_roll
+    interface: vcan1
+    can_id: 0x04
+    master_id: 0x14
+    model: "8009P"
+    notes: right_arm
+    upper_position_limit: 3.172
+    lower_position_limit: -0.223
+    max_output_torque: 54.0
+    max_output_speed: 45.0
+  - name: right_shoulder_yaw
+    interface: vcan1
+    can_id: 0x05
+    master_id: 0x15
+    model: "4340P"
+    notes: right_arm
+    upper_position_limit: 1.547
+    lower_position_limit: -1.594
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: right_elbow
+    interface: vcan1
+    can_id: 0x06
+    master_id: 0x16
+    model: "4340"
+    notes: right_arm
+    upper_position_limit: 0.992
+    lower_position_limit: -1.542
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: right_wrist_roll
+    interface: vcan1
+    can_id: 0x07
+    master_id: 0x17
+    model: "4310"
+    notes: right_arm
+    upper_position_limit: 1.563
+    lower_position_limit: -1.573
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: right_wrist_pitch
+    interface: vcan1
+    can_id: 0x08
+    master_id: 0x18
+    model: "4310"
+    notes: right_arm
+    upper_position_limit: 0.947
+    lower_position_limit: -0.628
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: right_wrist_yaw
+    interface: vcan1
+    can_id: 0x09
+    master_id: 0x19
+    model: "4310"
+    notes: right_arm
+    upper_position_limit: 1.328
+    lower_position_limit: -1.808
+    max_output_torque: 10.0
+    max_output_speed: 50.0
+  - name: left_hip_pitch
+    interface: vcan2
+    can_id: 0x01
+    master_id: 0x11
+    model: "10010"
+    notes: left_leg
+    upper_position_limit: 2.466
+    lower_position_limit: -2.384
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: left_hip_roll
+    interface: vcan2
+    can_id: 0x02
+    master_id: 0x12
+    model: "10010"
+    notes: left_leg
+    upper_position_limit: 2.465
+    lower_position_limit: -1.165
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: left_hip_yaw
+    interface: vcan2
+    can_id: 0x03
+    master_id: 0x13
+    model: "10010"
+    notes: left_leg
+    upper_position_limit: 3.140
+    lower_position_limit: -3.140
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: left_knee
+    interface: vcan2
+    can_id: 0x04
+    master_id: 0x14
+    model: "10010"
+    notes: left_leg
+    upper_position_limit: 1.977
+    lower_position_limit: -1.669
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: left_ankle_pitch
+    interface: vcan2
+    can_id: 0x05
+    master_id: 0x15
+    model: "4340"
+    notes: left_leg
+    upper_position_limit: 0.971
+    lower_position_limit: -0.826
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: left_ankle_roll
+    interface: vcan2
+    can_id: 0x06
+    master_id: 0x16
+    model: "4340"
+    notes: left_leg
+    upper_position_limit: 0.746
+    lower_position_limit: -0.894
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: right_hip_pitch
+    interface: vcan3
+    can_id: 0x01
+    master_id: 0x11
+    model: "10010"
+    notes: right_leg
+    upper_position_limit: 2.840
+    lower_position_limit: -1.175
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: right_hip_roll
+    interface: vcan3
+    can_id: 0x02
+    master_id: 0x12
+    model: "10010"
+    notes: right_leg
+    upper_position_limit: 1.043
+    lower_position_limit: -2.506
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: right_hip_yaw
+    interface: vcan3
+    can_id: 0x03
+    master_id: 0x13
+    model: "10010"
+    notes: right_leg
+    upper_position_limit: 3.140
+    lower_position_limit: -3.140
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: right_knee
+    interface: vcan3
+    can_id: 0x04
+    master_id: 0x14
+    model: "10010"
+    notes: right_leg
+    upper_position_limit: 1.984
+    lower_position_limit: -2.006
+    max_output_torque: 200.0
+    max_output_speed: 20.0
+  - name: right_ankle_pitch
+    interface: vcan3
+    can_id: 0x05
+    master_id: 0x15
+    model: "4340"
+    notes: right_leg
+    upper_position_limit: 0.831
+    lower_position_limit: -1.106
+    max_output_torque: 28.0
+    max_output_speed: 20.0
+  - name: right_ankle_roll
+    interface: vcan3
+    can_id: 0x06
+    master_id: 0x16
+    model: "4340"
+    notes: right_leg
+    upper_position_limit: 0.927
+    lower_position_limit: -0.891
+    max_output_torque: 28.0
+    max_output_speed: 20.0

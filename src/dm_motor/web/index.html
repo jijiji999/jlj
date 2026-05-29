@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DM Motor Control Panel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">DM Motor Visual Test Bench</p>
+          <h1>Single-Joint Enable, MIT Drag Control, Live State Feedback</h1>
+          <p class="hero-copy">
+            Use this panel to validate SocketCAN communication, per-motor enable and disable,
+            and real MIT behavior on the robot.
+          </p>
+        </div>
+        <div class="hero-meta">
+          <div class="stat-card">
+            <span class="stat-label">Backend</span>
+            <strong id="backend-status">Connecting...</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Motors</span>
+            <strong id="motor-count">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Auto Refresh</span>
+            <strong id="refresh-interval-label">100 ms</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <div class="toolbar-group">
+          <button id="refresh-button" class="ghost-button">Refresh State</button>
+          <button id="stop-all-continuous" class="ghost-button">Stop All Continuous</button>
+        </div>
+        <div class="toolbar-group">
+          <label class="input-label" for="continuous-rate-hz">Continuous Send Rate</label>
+          <input id="continuous-rate-hz" class="rate-input" type="number" min="1" max="200" step="1" value="20" />
+          <span class="rate-unit">Hz</span>
+        </div>
+      </section>
+
+      <section id="groups-container" class="groups-container"></section>
+    </main>
+
+    <template id="motor-card-template">
+      <article class="motor-card">
+        <header class="motor-card-header">
+          <div>
+            <p class="motor-group-tag"></p>
+            <h2 class="motor-name"></h2>
+            <p class="motor-meta"></p>
+          </div>
+          <div class="status-badge status-unknown">unknown</div>
+        </header>
+
+        <div class="action-row">
+          <button class="action-button enable-button">Enable</button>
+          <button class="action-button disable-button">Disable</button>
+          <button class="action-button neutral-button clear-button">Clear Error</button>
+          <button class="action-button neutral-button zero-button">Save Zero</button>
+        </div>
+
+        <section class="state-grid">
+          <div><span>Position</span><strong class="state-position">0.000</strong></div>
+          <div><span>Velocity</span><strong class="state-velocity">0.000</strong></div>
+          <div><span>Torque</span><strong class="state-torque">0.000</strong></div>
+          <div><span>MOS Temp</span><strong class="state-mos">0.0</strong></div>
+          <div><span>Rotor Temp</span><strong class="state-rotor">0.0</strong></div>
+          <div><span>Bus</span><strong class="state-interface"></strong></div>
+        </section>
+
+        <section class="slider-section">
+          <div class="slider-row">
+            <label>Position <strong class="value-position">0.000</strong></label>
+            <input class="slider-position" type="range" step="0.001" />
+          </div>
+          <div class="slider-row">
+            <label>Velocity <strong class="value-velocity">0.000</strong></label>
+            <input class="slider-velocity" type="range" step="0.001" />
+          </div>
+          <div class="slider-row">
+            <label>
+              Kp <strong class="value-kp">0.000</strong>
+              <button class="gain-lock-button kp-lock-button" type="button" aria-label="Toggle Kp unlock"></button>
+            </label>
+            <input class="slider-kp" type="range" step="0.001" disabled />
+          </div>
+          <div class="slider-row">
+            <label>
+              Kd <strong class="value-kd">0.000</strong>
+              <button class="gain-lock-button kd-lock-button" type="button" aria-label="Toggle Kd unlock"></button>
+            </label>
+            <input class="slider-kd" type="range" step="0.001" disabled />
+          </div>
+          <div class="slider-row">
+            <label>Torque <strong class="value-torque">0.000</strong></label>
+            <input class="slider-torque" type="range" step="0.001" />
+          </div>
+        </section>
+
+        <div class="mit-actions">
+          <button class="action-button send-button">Single Send</button>
+          <button class="action-button toggle-send-button">Continuous Off</button>
+          <button class="action-button neutral-button reset-button">Reset Zero</button>
+          <p class="command-message"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

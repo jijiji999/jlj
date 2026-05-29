@@ -1,0 +1,9 @@
+build/
+install/
+log/
+.agents/
+.codex/
+
+# Common local artifacts
+__pycache__/
+*.pyc
