@@ -158,7 +158,7 @@ pkill cannelloni
 总线分配如下：
 
 - `vcan0`：`waist_yaw` + 左臂全部
-- `vcan1`：`waist_roll`、`waist_pitch` + 右臂全部
+- `vcan1`：`waist_parallel_1`、`waist_parallel_2` + 右臂全部
 - `vcan2`：左腿全部
 - `vcan3`：右腿全部
 

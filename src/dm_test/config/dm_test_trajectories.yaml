@@ -20,6 +20,14 @@ groups:
       left_wrist_roll: {kp: 12.0, kd: 0.4}
       left_wrist_pitch: {kp: 12.0, kd: 0.4}
       left_wrist_yaw: {kp: 10.0, kd: 0.35}
+    csv_columns:
+      left_shoulder_pitch: left_shoulder_pitch
+      left_shoulder_roll: left_shoulder_roll
+      left_shoulder_yaw: left_shoulder_yaw
+      left_elbow: left_elbow
+      left_wrist_roll: left_wrist_roll
+      left_wrist_pitch: left_wrist_pitch
+      left_wrist_yaw: left_wrist_yaw
 
   right_arm:
     joints:
@@ -40,6 +48,14 @@ groups:
       right_wrist_roll: {kp: 12.0, kd: 0.4}
       right_wrist_pitch: {kp: 12.0, kd: 0.4}
       right_wrist_yaw: {kp: 10.0, kd: 0.35}
+    csv_columns:
+      right_shoulder_pitch: right_shoulder_pitch
+      right_shoulder_roll: right_shoulder_roll
+      right_shoulder_yaw: right_shoulder_yaw
+      right_elbow: right_elbow
+      right_wrist_roll: right_wrist_roll
+      right_wrist_pitch: right_wrist_pitch
+      right_wrist_yaw: right_wrist_yaw
 
   left_leg:
     joints:
@@ -47,8 +63,8 @@ groups:
       - left_hip_roll
       - left_hip_yaw
       - left_knee
-      - left_ankle_pitch
-      - left_ankle_roll
+      - left_ankle_parallel_1
+      - left_ankle_parallel_2
     default_kp: 40.0
     default_kd: 1.5
 
@@ -58,24 +74,24 @@ groups:
       - right_hip_roll
       - right_hip_yaw
       - right_knee
-      - right_ankle_pitch
-      - right_ankle_roll
+      - right_ankle_parallel_1
+      - right_ankle_parallel_2
     default_kp: 40.0
     default_kd: 1.5
 
   waist:
     joints:
       - waist_yaw
-      - waist_roll
-      - waist_pitch
+      - waist_parallel_1
+      - waist_parallel_2
     default_kp: 35.0
     default_kd: 1.2
 
   whole_body:
     joints:
       - waist_yaw
-      - waist_roll
-      - waist_pitch
+      - waist_parallel_1
+      - waist_parallel_2
       - left_shoulder_pitch
       - left_shoulder_roll
       - left_shoulder_yaw
@@ -94,14 +110,14 @@ groups:
       - left_hip_roll
       - left_hip_yaw
       - left_knee
-      - left_ankle_pitch
-      - left_ankle_roll
+      - left_ankle_parallel_1
+      - left_ankle_parallel_2
       - right_hip_pitch
       - right_hip_roll
       - right_hip_yaw
       - right_knee
-      - right_ankle_pitch
-      - right_ankle_roll
+      - right_ankle_parallel_1
+      - right_ankle_parallel_2
     default_kp: 25.0
     default_kd: 1.0
 

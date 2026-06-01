@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DM Motor Mock Control Panel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">DM Motor Visual Test Bench</p>
+          <h1>Temporary Mock Panel for Screenshot Capture</h1>
+          <p class="hero-copy">
+            当前设备未连接，本页面仅用于截图展示。界面布局、分组方式和控制项尽量对齐真实
+            `dm_motor` 可视化调试面板。
+          </p>
+        </div>
+        <div class="hero-meta">
+          <div class="stat-card">
+            <span class="stat-label">Backend</span>
+            <strong>Mock Connected</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Motors</span>
+            <strong>29</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Auto Refresh</span>
+            <strong>100 ms</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <div class="toolbar-group">
+          <button class="ghost-button">Refresh State</button>
+          <button class="ghost-button">Stop All Continuous</button>
+        </div>
+        <div class="toolbar-group">
+          <label class="input-label" for="rate">Continuous Send Rate</label>
+          <input id="rate" class="rate-input" type="number" value="20" />
+          <span class="rate-unit">Hz</span>
+        </div>
+      </section>
+
+      <section class="groups-container">
+        <section class="group-section">
+          <div class="group-header">
+            <div>
+              <h2>Torso</h2>
+              <p>Waist joints and upper trunk drives</p>
+            </div>
+            <strong>3 motors</strong>
+          </div>
+          <div class="motor-grid">
+            <article class="motor-card">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">waist_yaw</h2>
+                  <p class="motor-meta">10010 | CAN 0x01</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <div class="action-row">
+                <button class="action-button">Enable</button>
+                <button class="action-button disable-button">Disable</button>
+                <button class="action-button neutral-button">Clear Error</button>
+                <button class="action-button neutral-button">Save Zero</button>
+              </div>
+              <section class="state-grid">
+                <div><span>Position</span><strong>0.184</strong></div>
+                <div><span>Velocity</span><strong>0.012</strong></div>
+                <div><span>Torque</span><strong>1.920</strong></div>
+                <div><span>MOS Temp</span><strong>34.2</strong></div>
+                <div><span>Rotor Temp</span><strong>37.8</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+              <section class="slider-section">
+                <div class="slider-row">
+                  <label>Position <strong>0.180</strong></label>
+                  <input type="range" min="-3.14" max="3.14" value="58" />
+                </div>
+                <div class="slider-row">
+                  <label>Velocity <strong>0.020</strong></label>
+                  <input type="range" min="-20" max="20" value="50" />
+                </div>
+                <div class="slider-row">
+                  <label>Kp <strong>27.000</strong><button class="gain-lock-button"></button></label>
+                  <input type="range" min="0" max="500" value="27" disabled />
+                </div>
+                <div class="slider-row">
+                  <label>Kd <strong>3.700</strong><button class="gain-lock-button"></button></label>
+                  <input type="range" min="0" max="5" value="74" disabled />
+                </div>
+                <div class="slider-row">
+                  <label>Torque <strong>2.000</strong></label>
+                  <input type="range" min="-120" max="120" value="51" />
+                </div>
+              </section>
+              <div class="mit-actions">
+                <button class="action-button send-button">Single Send</button>
+                <button class="action-button toggle-send-button is-active">Continuous On</button>
+                <button class="action-button neutral-button">Reset Zero</button>
+                <p class="command-message is-success">Continuous send running at 20 Hz</p>
+              </div>
+            </article>
+
+            <article class="motor-card">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan1</p>
+                  <h2 class="motor-name">waist_parallel_1</h2>
+                  <p class="motor-meta">8009P | CAN 0x01</p>
+                </div>
+                <div class="status-badge status-disabled">disabled</div>
+              </header>
+              <div class="action-row">
+                <button class="action-button">Enable</button>
+                <button class="action-button disable-button">Disable</button>
+                <button class="action-button neutral-button">Clear Error</button>
+                <button class="action-button neutral-button">Save Zero</button>
+              </div>
+              <section class="state-grid">
+                <div><span>Position</span><strong>-0.032</strong></div>
+                <div><span>Velocity</span><strong>0.000</strong></div>
+                <div><span>Torque</span><strong>0.000</strong></div>
+                <div><span>MOS Temp</span><strong>31.4</strong></div>
+                <div><span>Rotor Temp</span><strong>33.0</strong></div>
+                <div><span>Bus</span><strong>vcan1</strong></div>
+              </section>
+              <section class="slider-section">
+                <div class="slider-row">
+                  <label>Position <strong>0.000</strong></label>
+                  <input type="range" min="-12.5" max="12.5" value="50" />
+                </div>
+                <div class="slider-row">
+                  <label>Velocity <strong>0.000</strong></label>
+                  <input type="range" min="-25" max="25" value="50" />
+                </div>
+                <div class="slider-row">
+                  <label>Kp <strong>27.000</strong><button class="gain-lock-button"></button></label>
+                  <input type="range" min="0" max="500" value="27" disabled />
+                </div>
+                <div class="slider-row">
+                  <label>Kd <strong>3.700</strong><button class="gain-lock-button"></button></label>
+                  <input type="range" min="0" max="5" value="74" disabled />
+                </div>
+                <div class="slider-row">
+                  <label>Torque <strong>0.000</strong></label>
+                  <input type="range" min="-30" max="30" value="50" />
+                </div>
+              </section>
+              <div class="mit-actions">
+                <button class="action-button send-button">Single Send</button>
+                <button class="action-button toggle-send-button">Continuous Off</button>
+                <button class="action-button neutral-button">Reset Zero</button>
+                <p class="command-message">Ready for command</p>
+              </div>
+            </article>
+
+            <article class="motor-card">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan1</p>
+                  <h2 class="motor-name">waist_parallel_2</h2>
+                  <p class="motor-meta">8009P | CAN 0x02</p>
+                </div>
+                <div class="status-badge status-fault">fault</div>
+              </header>
+              <div class="action-row">
+                <button class="action-button">Enable</button>
+                <button class="action-button disable-button">Disable</button>
+                <button class="action-button neutral-button">Clear Error</button>
+                <button class="action-button neutral-button">Save Zero</button>
+              </div>
+              <section class="state-grid">
+                <div><span>Position</span><strong>-0.118</strong></div>
+                <div><span>Velocity</span><strong>-0.425</strong></div>
+                <div><span>Torque</span><strong>4.221</strong></div>
+                <div><span>MOS Temp</span><strong>48.6</strong></div>
+                <div><span>Rotor Temp</span><strong>55.1</strong></div>
+                <div><span>Bus</span><strong>vcan1</strong></div>
+              </section>
+              <section class="slider-section">
+                <div class="slider-row">
+                  <label>Position <strong>-0.120</strong></label>
+                  <input type="range" min="-12.5" max="12.5" value="49" />
+                </div>
+                <div class="slider-row">
+                  <label>Velocity <strong>-0.400</strong></label>
+                  <input type="range" min="-25" max="25" value="49" />
+                </div>
+                <div class="slider-row">
+                  <label>Kp <strong>27.000</strong><button class="gain-lock-button is-unlocked"></button></label>
+                  <input type="range" min="0" max="500" value="96" />
+                </div>
+                <div class="slider-row">
+                  <label>Kd <strong>2.100</strong><button class="gain-lock-button is-unlocked"></button></label>
+                  <input type="range" min="0" max="5" value="42" />
+                </div>
+                <div class="slider-row">
+                  <label>Torque <strong>4.500</strong></label>
+                  <input type="range" min="-30" max="30" value="58" />
+                </div>
+              </section>
+              <div class="mit-actions">
+                <button class="action-button send-button">Single Send</button>
+                <button class="action-button toggle-send-button">Continuous Off</button>
+                <button class="action-button neutral-button">Reset Zero</button>
+                <p class="command-message is-error">Driver reported over-temperature warning</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="group-section">
+          <div class="group-header">
+            <div>
+              <h2>Left Arm</h2>
+              <p>Left shoulder, elbow and wrist chain</p>
+            </div>
+            <strong>7 motors</strong>
+          </div>
+          <div class="motor-grid compact-grid">
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_shoulder_pitch</h2>
+                  <p class="motor-meta">8009P | CAN 0x02</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-1.204</strong></div>
+                <div><span>Velocity</span><strong>0.115</strong></div>
+                <div><span>Torque</span><strong>3.102</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_shoulder_roll</h2>
+                  <p class="motor-meta">8009P | CAN 0x03</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.814</strong></div>
+                <div><span>Velocity</span><strong>0.083</strong></div>
+                <div><span>Torque</span><strong>2.884</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_shoulder_yaw</h2>
+                  <p class="motor-meta">4340P | CAN 0x04</p>
+                </div>
+                <div class="status-badge status-disabled">disabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.042</strong></div>
+                <div><span>Velocity</span><strong>0.000</strong></div>
+                <div><span>Torque</span><strong>0.000</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_elbow</h2>
+                  <p class="motor-meta">4340 | CAN 0x05</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.336</strong></div>
+                <div><span>Velocity</span><strong>0.291</strong></div>
+                <div><span>Torque</span><strong>5.228</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_wrist_roll</h2>
+                  <p class="motor-meta">4310 | CAN 0x06</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.147</strong></div>
+                <div><span>Velocity</span><strong>-0.214</strong></div>
+                <div><span>Torque</span><strong>0.882</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_wrist_pitch</h2>
+                  <p class="motor-meta">4310 | CAN 0x07</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.078</strong></div>
+                <div><span>Velocity</span><strong>0.119</strong></div>
+                <div><span>Torque</span><strong>0.462</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan0</p>
+                  <h2 class="motor-name">left_wrist_yaw</h2>
+                  <p class="motor-meta">4310 | CAN 0x08</p>
+                </div>
+                <div class="status-badge status-disabled">disabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.012</strong></div>
+                <div><span>Velocity</span><strong>0.000</strong></div>
+                <div><span>Torque</span><strong>0.000</strong></div>
+                <div><span>Bus</span><strong>vcan0</strong></div>
+              </section>
+            </article>
+          </div>
+        </section>
+
+        <section class="group-section">
+          <div class="group-header">
+            <div>
+              <h2>Right Leg</h2>
+              <p>Right hip, knee and ankle chain</p>
+            </div>
+            <strong>6 motors</strong>
+          </div>
+          <div class="motor-grid compact-grid">
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_hip_pitch</h2>
+                  <p class="motor-meta">10010 | CAN 0x01</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.622</strong></div>
+                <div><span>Velocity</span><strong>-0.091</strong></div>
+                <div><span>Torque</span><strong>12.408</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_hip_roll</h2>
+                  <p class="motor-meta">10010 | CAN 0x02</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.214</strong></div>
+                <div><span>Velocity</span><strong>0.065</strong></div>
+                <div><span>Torque</span><strong>9.772</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_hip_yaw</h2>
+                  <p class="motor-meta">10010 | CAN 0x03</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.118</strong></div>
+                <div><span>Velocity</span><strong>0.043</strong></div>
+                <div><span>Torque</span><strong>7.605</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_knee</h2>
+                  <p class="motor-meta">10010 | CAN 0x04</p>
+                </div>
+                <div class="status-badge status-enabled">enabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.962</strong></div>
+                <div><span>Velocity</span><strong>0.152</strong></div>
+                <div><span>Torque</span><strong>16.030</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_ankle_parallel_1</h2>
+                  <p class="motor-meta">4340 | CAN 0x05</p>
+                </div>
+                <div class="status-badge status-disabled">disabled</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>0.034</strong></div>
+                <div><span>Velocity</span><strong>0.000</strong></div>
+                <div><span>Torque</span><strong>0.000</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+            <article class="motor-card compact">
+              <header class="motor-card-header">
+                <div>
+                  <p class="motor-group-tag">vcan3</p>
+                  <h2 class="motor-name">right_ankle_parallel_2</h2>
+                  <p class="motor-meta">4340 | CAN 0x06</p>
+                </div>
+                <div class="status-badge status-fault">fault</div>
+              </header>
+              <section class="state-grid mini-state-grid">
+                <div><span>Position</span><strong>-0.147</strong></div>
+                <div><span>Velocity</span><strong>-0.806</strong></div>
+                <div><span>Torque</span><strong>6.812</strong></div>
+                <div><span>Bus</span><strong>vcan3</strong></div>
+              </section>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

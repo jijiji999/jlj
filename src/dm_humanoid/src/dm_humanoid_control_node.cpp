@@ -1,4 +1,5 @@
 #include "dm_motor/dm_motor_manager.hpp"
+#include "dm_humanoid/parallel_joint_adapter.hpp"
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
 
@@ -21,6 +22,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -38,6 +40,11 @@
 
 namespace dm_motor
 {
+
+using dm_humanoid::LogicalJointCommand;
+using dm_humanoid::LogicalJointState;
+using dm_humanoid::ParallelJointAdapter;
+using dm_humanoid::ParallelMechanismSpec;
 
 namespace
 {
@@ -167,6 +174,16 @@ struct JointControlConfig
   ModeGains dance_gains {};
   float action_scale {0.25F};
   float action_offset {0.0F};
+};
+
+struct ParallelMechanismConfig
+{
+  std::string name;
+  std::string pitch_joint_name;
+  std::string roll_joint_name;
+  std::string motor_1_name;
+  std::string motor_2_name;
+  std::string config_path;
 };
 
 float joy_axis_or_zero(const sensor_msgs::msg::Joy & message, const int index)
@@ -379,6 +396,8 @@ public:
       std::bind(&DmHumanoidControlNode::imu_callback, this, std::placeholders::_1));
 
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 20);
+    raw_joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
+      "raw_motor_states", 20);
     mode_pub_ = this->create_publisher<std_msgs::msg::String>(mode_topic_, 10);
 
     if (publish_policy_debug_topics_) {
@@ -391,7 +410,9 @@ public:
     if (auto_enable_on_start_) {
       const auto results = manager_->enable_all(std::chrono::milliseconds(command_timeout_ms_));
       log_results("enable_all", results, true);
-      update_motor_state_cache(manager_->snapshot_states());
+      const auto initial_states = manager_->snapshot_states();
+      update_motor_state_cache(initial_states);
+      rebuild_logical_joint_state_cache(initial_states);
     } else {
       RCLCPP_WARN(
         this->get_logger(),
@@ -476,9 +497,53 @@ private:
       .lexically_normal().string();
   }
 
+  void load_parallel_mechanisms(const YAML::Node & root)
+  {
+    parallel_mechanism_configs_.clear();
+    parallel_adapter_ = ParallelJointAdapter {};
+
+    const YAML::Node mechanisms = root["parallel_mechanisms"];
+    if (!mechanisms || !mechanisms.IsSequence()) {
+      return;
+    }
+
+    for (const auto & mechanism_node : mechanisms) {
+      ParallelMechanismConfig config;
+      config.name = read_optional_value<std::string>(mechanism_node, "name", std::string());
+      config.pitch_joint_name = read_optional_value<std::string>(
+        mechanism_node, "pitch_joint", std::string());
+      config.roll_joint_name = read_optional_value<std::string>(
+        mechanism_node, "roll_joint", std::string());
+      config.motor_1_name = read_optional_value<std::string>(
+        mechanism_node, "motor_1", std::string());
+      config.motor_2_name = read_optional_value<std::string>(
+        mechanism_node, "motor_2", std::string());
+      config.config_path = resolve_auxiliary_path(
+        read_optional_value<std::string>(mechanism_node, "config_path", std::string()));
+
+      std::string error_message;
+      if (!parallel_adapter_.add_mechanism(
+          ParallelMechanismSpec {
+            config.name,
+            config.pitch_joint_name,
+            config.roll_joint_name,
+            config.motor_1_name,
+            config.motor_2_name,
+            config.config_path},
+          error_message))
+      {
+        throw std::runtime_error(
+                "Failed to load parallel mechanism " + config.name + ": " + error_message);
+      }
+
+      parallel_mechanism_configs_.push_back(config);
+    }
+  }
+
   void load_controller_config(const YAML::Node & root)
   {
     const YAML::Node controller = root["controller"];
+    load_parallel_mechanisms(root);
 
     joy_topic_ = read_optional_value<std::string>(controller, "joy_topic", "joy");
     imu_topic_ = read_optional_value<std::string>(controller, "imu_topic", "imu/data");
@@ -559,10 +624,10 @@ private:
         joint_order.push_back(joint_name.as<std::string>());
       }
     } else {
-      joint_order = manager_->motor_names();
+      joint_order = default_joint_order();
       RCLCPP_WARN(
         this->get_logger(),
-        "controller.policy_joint_order is not set, falling back to motor config order");
+        "controller.policy_joint_order is not set, falling back to logical joint order");
     }
 
     validate_joint_order(joint_order);
@@ -649,12 +714,30 @@ private:
     latest_action_.assign(policy_config_.expected_action_dim, 0.0F);
   }
 
+  std::vector<std::string> default_joint_order() const
+  {
+    std::vector<std::string> order;
+    const auto motor_names = manager_->motor_names();
+    order.reserve(motor_names.size());
+    for (const auto & name : motor_names) {
+      if (!parallel_adapter_.is_parallel_motor(name)) {
+        order.push_back(name);
+      }
+    }
+
+    for (const auto & mechanism : parallel_mechanism_configs_) {
+      order.push_back(mechanism.pitch_joint_name);
+      order.push_back(mechanism.roll_joint_name);
+    }
+    return order;
+  }
+
   void validate_joint_order(const std::vector<std::string> & joint_order) const
   {
-    const auto configured_names = manager_->motor_names();
+    const auto configured_names = default_joint_order();
     if (joint_order.size() != configured_names.size()) {
       throw std::runtime_error(
-              "controller.policy_joint_order must contain every configured motor exactly once");
+              "controller.policy_joint_order must contain every logical joint exactly once");
     }
 
     std::unordered_map<std::string, size_t> configured_lookup;
@@ -803,8 +886,10 @@ private:
     (void)manager_->poll_once(std::chrono::milliseconds(rx_poll_timeout_ms_));
     const auto states = manager_->snapshot_states();
     update_motor_state_cache(states);
+    rebuild_logical_joint_state_cache(states);
     maybe_capture_initial_positions();
-    publish_joint_states(states);
+    publish_joint_states();
+    publish_raw_motor_states(states);
     publish_mode();
 
     if (!have_all_joint_states()) {
@@ -815,26 +900,41 @@ private:
       return;
     }
 
-    std::vector<NamedMitCommand> commands;
+    std::vector<LogicalJointCommand> logical_commands;
     switch (mode_) {
       case RobotMode::kFixed:
-        commands = build_fixed_commands();
+        logical_commands = build_fixed_commands();
         break;
       case RobotMode::kPassive:
-        commands = build_passive_commands();
+        logical_commands = build_passive_commands();
         break;
       case RobotMode::kDance:
-        commands = build_dance_commands();
+        logical_commands = build_dance_commands();
         break;
       case RobotMode::kLoco:
-        commands = build_loco_commands();
+        logical_commands = build_loco_commands();
         break;
       default:
-        commands = build_passive_commands();
+        logical_commands = build_passive_commands();
         break;
     }
 
-    if (commands.empty()) {
+    if (logical_commands.empty()) {
+      return;
+    }
+
+    std::vector<NamedMitCommand> commands;
+    std::vector<std::string> translation_errors;
+    const bool translated = parallel_adapter_.translate_joint_commands(
+      logical_commands,
+      commands,
+      translation_errors);
+    for (const auto & error : translation_errors) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "%s", error.c_str());
+    }
+    if (!translated || commands.empty()) {
       return;
     }
 
@@ -851,6 +951,23 @@ private:
     }
   }
 
+  void rebuild_logical_joint_state_cache(const std::vector<MotorState> & states)
+  {
+    const auto previous_joint_states = logical_joint_state_cache_;
+    std::vector<std::string> errors;
+    logical_joint_state_cache_.clear();
+    (void)parallel_adapter_.rebuild_joint_states(
+      states,
+      previous_joint_states,
+      logical_joint_state_cache_,
+      errors);
+    for (const auto & error : errors) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "%s", error.c_str());
+    }
+  }
+
   void maybe_capture_initial_positions()
   {
     bool captured_any = false;
@@ -859,8 +976,8 @@ private:
         continue;
       }
 
-      const auto state_it = motor_state_cache_.find(joint.name);
-      if (state_it == motor_state_cache_.end()) {
+      const auto state_it = logical_joint_state_cache_.find(joint.name);
+      if (state_it == logical_joint_state_cache_.end() || !state_it->second.valid) {
         continue;
       }
 
@@ -890,17 +1007,18 @@ private:
     return std::all_of(
       joints_.begin(), joints_.end(),
       [this](const JointControlConfig & joint) {
-        return motor_state_cache_.find(joint.name) != motor_state_cache_.end();
+        const auto it = logical_joint_state_cache_.find(joint.name);
+        return it != logical_joint_state_cache_.end() && it->second.valid;
       });
   }
 
-  const MotorState * find_state(const std::string & name) const
+  const LogicalJointState * find_state(const std::string & name) const
   {
-    const auto state_it = motor_state_cache_.find(name);
-    return state_it == motor_state_cache_.end() ? nullptr : &state_it->second;
+    const auto state_it = logical_joint_state_cache_.find(name);
+    return state_it == logical_joint_state_cache_.end() ? nullptr : &state_it->second;
   }
 
-  std::vector<NamedMitCommand> build_fixed_commands()
+  std::vector<LogicalJointCommand> build_fixed_commands()
   {
     if (!all_initial_positions_ready()) {
       RCLCPP_WARN_THROTTLE(
@@ -911,12 +1029,12 @@ private:
     return build_pose_commands(RobotMode::kFixed, std::nullopt);
   }
 
-  std::vector<NamedMitCommand> build_passive_commands()
+  std::vector<LogicalJointCommand> build_passive_commands()
   {
     return build_pose_commands(RobotMode::kPassive, std::nullopt);
   }
 
-  std::vector<NamedMitCommand> build_dance_commands()
+  std::vector<LogicalJointCommand> build_dance_commands()
   {
     if (!warned_dance_placeholder_) {
       warned_dance_placeholder_ = true;
@@ -934,7 +1052,7 @@ private:
     return build_pose_commands(RobotMode::kDance, std::nullopt);
   }
 
-  std::vector<NamedMitCommand> build_loco_commands()
+  std::vector<LogicalJointCommand> build_loco_commands()
   {
     if (!has_imu_) {
       RCLCPP_WARN_THROTTLE(
@@ -988,17 +1106,12 @@ private:
     latest_action_ = action;
     publish_policy_debug(observation, latest_action_);
 
-    std::vector<NamedMitCommand> commands;
+    std::vector<LogicalJointCommand> commands;
     commands.reserve(joints_.size());
     for (size_t index = 0; index < joints_.size(); ++index) {
       const auto & joint = joints_[index];
       const auto * state = find_state(joint.name);
       if (state == nullptr) {
-        return {};
-      }
-
-      auto motor_config = manager_->motor_config(joint.name);
-      if (!motor_config.has_value()) {
         return {};
       }
 
@@ -1006,39 +1119,48 @@ private:
         latest_action_[index],
         -policy_config_.action_clip,
         policy_config_.action_clip);
+      float position_min = -std::numeric_limits<float>::infinity();
+      float position_max = std::numeric_limits<float>::infinity();
+      if (const auto logical_limits = parallel_adapter_.joint_limits(joint.name); logical_limits.has_value()) {
+        position_min = logical_limits->first;
+        position_max = logical_limits->second;
+      } else {
+        auto motor_config = manager_->motor_config(joint.name);
+        if (!motor_config.has_value()) {
+          return {};
+        }
+        position_min = motor_config->limits.position_min;
+        position_max = motor_config->limits.position_max;
+      }
+
       MitCommand command;
       command.position = clamp_value(
         joint.initial_position + joint.action_offset + joint.action_scale * clipped_action,
-        motor_config->limits.position_min,
-        motor_config->limits.position_max);
+        position_min,
+        position_max);
       command.velocity = 0.0F;
       command.kp = joint.loco_gains.kp;
       command.kd = joint.loco_gains.kd;
       command.torque = 0.0F;
 
-      commands.push_back(NamedMitCommand {joint.name, command});
+      commands.push_back(LogicalJointCommand {joint.name, command});
     }
 
     previous_action_ = latest_action_;
     return commands;
   }
 
-  std::vector<NamedMitCommand> build_pose_commands(
+  std::vector<LogicalJointCommand> build_pose_commands(
     const RobotMode target_mode,
     const std::optional<std::vector<float>> & explicit_positions)
   {
-    std::vector<NamedMitCommand> commands;
+    std::vector<LogicalJointCommand> commands;
     commands.reserve(joints_.size());
 
     for (size_t index = 0; index < joints_.size(); ++index) {
       const auto & joint = joints_[index];
       const auto * state = find_state(joint.name);
       if (state == nullptr) {
-        return {};
-      }
-
-      auto motor_config = manager_->motor_config(joint.name);
-      if (!motor_config.has_value()) {
         return {};
       }
 
@@ -1065,17 +1187,31 @@ private:
         target_position = explicit_positions->at(index);
       }
 
+      float position_min = -std::numeric_limits<float>::infinity();
+      float position_max = std::numeric_limits<float>::infinity();
+      if (const auto logical_limits = parallel_adapter_.joint_limits(joint.name); logical_limits.has_value()) {
+        position_min = logical_limits->first;
+        position_max = logical_limits->second;
+      } else {
+        auto motor_config = manager_->motor_config(joint.name);
+        if (!motor_config.has_value()) {
+          return {};
+        }
+        position_min = motor_config->limits.position_min;
+        position_max = motor_config->limits.position_max;
+      }
+
       MitCommand command;
       command.position = clamp_value(
         target_position,
-        motor_config->limits.position_min,
-        motor_config->limits.position_max);
+        position_min,
+        position_max);
       command.velocity = 0.0F;
       command.kp = gains->kp;
       command.kd = gains->kd;
       command.torque = 0.0F;
 
-      commands.push_back(NamedMitCommand {joint.name, command});
+      commands.push_back(LogicalJointCommand {joint.name, command});
     }
 
     return commands;
@@ -1151,8 +1287,36 @@ private:
     action_pub_->publish(action_message);
   }
 
-  void publish_joint_states(const std::vector<MotorState> & states)
+  void publish_joint_states()
   {
+    sensor_msgs::msg::JointState message;
+    message.header.stamp = this->now();
+    message.name.reserve(joints_.size());
+    message.position.reserve(joints_.size());
+    message.velocity.reserve(joints_.size());
+    message.effort.reserve(joints_.size());
+
+    for (const auto & joint : joints_) {
+      const auto state_it = logical_joint_state_cache_.find(joint.name);
+      if (state_it == logical_joint_state_cache_.end() || !state_it->second.valid) {
+        continue;
+      }
+
+      message.name.push_back(state_it->second.name);
+      message.position.push_back(state_it->second.position);
+      message.velocity.push_back(state_it->second.velocity);
+      message.effort.push_back(state_it->second.effort);
+    }
+
+    joint_state_pub_->publish(message);
+  }
+
+  void publish_raw_motor_states(const std::vector<MotorState> & states)
+  {
+    if (!raw_joint_state_pub_) {
+      return;
+    }
+
     sensor_msgs::msg::JointState message;
     message.header.stamp = this->now();
     message.name.reserve(states.size());
@@ -1167,7 +1331,7 @@ private:
       message.effort.push_back(state.torque);
     }
 
-    joint_state_pub_->publish(message);
+    raw_joint_state_pub_->publish(message);
   }
 
   void log_results(
@@ -1211,6 +1375,9 @@ private:
   std::vector<JointControlConfig> joints_;
   std::unordered_map<std::string, size_t> joint_lookup_;
   std::unordered_map<std::string, MotorState> motor_state_cache_;
+  std::unordered_map<std::string, LogicalJointState> logical_joint_state_cache_;
+  std::vector<ParallelMechanismConfig> parallel_mechanism_configs_;
+  ParallelJointAdapter parallel_adapter_ {};
   sensor_msgs::msg::Imu latest_imu_;
   bool has_imu_ {false};
   bool logged_initial_positions_ready_ {false};
@@ -1241,6 +1408,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr raw_joint_state_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr mode_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr observation_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr action_pub_;

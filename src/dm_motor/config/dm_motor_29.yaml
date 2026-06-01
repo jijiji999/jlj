@@ -27,7 +27,7 @@ motors:
     lower_position_limit: -3.140
     max_output_torque: 200.0
     max_output_speed: 20.0
-  - name: waist_roll
+  - name: waist_parallel_1
     interface: vcan1
     can_id: 0x01
     master_id: 0x11
@@ -35,7 +35,7 @@ motors:
     notes: torso
     max_output_torque: 54.0
     max_output_speed: 45.0
-  - name: waist_pitch
+  - name: waist_parallel_2
     interface: vcan1
     can_id: 0x02
     master_id: 0x12
@@ -223,7 +223,7 @@ motors:
     lower_position_limit: -1.669
     max_output_torque: 200.0
     max_output_speed: 20.0
-  - name: left_ankle_pitch
+  - name: left_ankle_parallel_1
     interface: vcan2
     can_id: 0x05
     master_id: 0x15
@@ -233,7 +233,7 @@ motors:
     lower_position_limit: -0.826
     max_output_torque: 28.0
     max_output_speed: 20.0
-  - name: left_ankle_roll
+  - name: left_ankle_parallel_2
     interface: vcan2
     can_id: 0x06
     master_id: 0x16
@@ -283,7 +283,7 @@ motors:
     lower_position_limit: -2.006
     max_output_torque: 200.0
     max_output_speed: 20.0
-  - name: right_ankle_pitch
+  - name: right_ankle_parallel_1
     interface: vcan3
     can_id: 0x05
     master_id: 0x15
@@ -293,7 +293,7 @@ motors:
     lower_position_limit: -1.106
     max_output_torque: 28.0
     max_output_speed: 20.0
-  - name: right_ankle_roll
+  - name: right_ankle_parallel_2
     interface: vcan3
     can_id: 0x06
     master_id: 0x16

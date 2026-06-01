@@ -2,6 +2,7 @@
 #define DM_TEST__DM_TRAJECTORY_TEST_NODE_HPP_
 
 #include <chrono>
+#include <optional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -35,6 +36,7 @@ private:
     double default_kp {25.0};
     double default_kd {1.0};
     std::unordered_map<std::string, JointGain> joint_gains;
+    std::unordered_map<std::string, std::string> csv_column_names;
   };
 
   struct RawTrajectoryPoint
@@ -55,6 +57,7 @@ private:
     std::string group_name;
     std::string description;
     bool loop {false};
+    bool use_absolute_positions {false};
     std::vector<TrajectoryPoint> points;
     double duration {0.0};
   };
@@ -68,6 +71,7 @@ private:
   std::string resolve_test_config_path(const std::string & configured_path) const;
   std::string resolve_path_relative_to_test_config(const std::string & path) const;
   void load_test_config();
+  void load_csv_trajectory(const std::string & csv_path);
   void validate_active_group_against_motor_config();
   void start_test_session();
   void stop_test_session();
@@ -86,10 +90,18 @@ private:
     const std::vector<double> & target_velocities);
   void log_command_results(const std::vector<dm_motor::MotorCommandResult> & results);
   JointGain gain_for_joint(const std::string & joint_name) const;
+  std::vector<std::string> split_csv_line(const std::string & line) const;
+  std::optional<size_t> find_time_column_index(const std::vector<std::string> & headers) const;
+  std::vector<size_t> resolve_csv_joint_column_indices(
+    const std::vector<std::string> & headers) const;
+  static std::string trim_copy(const std::string & value);
+  static std::string to_lower_copy(const std::string & value);
 
   std::string test_config_path_;
   std::string motor_config_path_;
   std::string trajectory_name_;
+  std::string trajectory_csv_path_;
+  std::string time_column_name_;
 
   GroupConfig active_group_;
   TrajectoryConfig active_trajectory_;
@@ -104,6 +116,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr error_pub_;
 
   double command_rate_hz_ {100.0};
+  double playback_speed_ {1.0};
+  double csv_row_rate_hz_ {0.0};
   int command_timeout_ms_ {20};
   double start_delay_sec_ {1.0};
   bool auto_enable_on_start_ {true};

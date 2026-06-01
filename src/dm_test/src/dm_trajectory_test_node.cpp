@@ -4,8 +4,10 @@
 #include "yaml-cpp/yaml.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -39,14 +41,22 @@ DmTrajectoryTestNode::DmTrajectoryTestNode()
 {
   this->declare_parameter<std::string>("config_path", "");
   this->declare_parameter<std::string>("trajectory_name", "left_arm_small_range");
+  this->declare_parameter<std::string>("trajectory_csv_path", "");
+  this->declare_parameter<std::string>("time_column_name", "time");
   this->declare_parameter<double>("command_rate_hz", 100.0);
+  this->declare_parameter<double>("playback_speed", 1.0);
+  this->declare_parameter<double>("csv_row_rate_hz", 0.0);
   this->declare_parameter<int>("command_timeout_ms", 20);
   this->declare_parameter<double>("start_delay_sec", 1.0);
   this->declare_parameter<bool>("auto_enable_on_start", true);
   this->declare_parameter<bool>("auto_disable_on_shutdown", false);
 
   trajectory_name_ = this->get_parameter("trajectory_name").as_string();
+  trajectory_csv_path_ = this->get_parameter("trajectory_csv_path").as_string();
+  time_column_name_ = this->get_parameter("time_column_name").as_string();
   command_rate_hz_ = this->get_parameter("command_rate_hz").as_double();
+  playback_speed_ = this->get_parameter("playback_speed").as_double();
+  csv_row_rate_hz_ = this->get_parameter("csv_row_rate_hz").as_double();
   command_timeout_ms_ = this->get_parameter("command_timeout_ms").as_int();
   start_delay_sec_ = this->get_parameter("start_delay_sec").as_double();
   auto_enable_on_start_ = this->get_parameter("auto_enable_on_start").as_bool();
@@ -54,6 +64,12 @@ DmTrajectoryTestNode::DmTrajectoryTestNode()
 
   if (command_rate_hz_ <= 0.0) {
     throw std::runtime_error("command_rate_hz must be > 0");
+  }
+  if (playback_speed_ <= 0.0) {
+    throw std::runtime_error("playback_speed must be > 0");
+  }
+  if (csv_row_rate_hz_ < 0.0) {
+    throw std::runtime_error("csv_row_rate_hz must be >= 0");
   }
   if (command_timeout_ms_ < 0) {
     throw std::runtime_error("command_timeout_ms must be >= 0");
@@ -162,6 +178,9 @@ void DmTrajectoryTestNode::load_test_config()
   }
 
   active_group_.name = group_name;
+  active_group_.joints.clear();
+  active_group_.joint_gains.clear();
+  active_group_.csv_column_names.clear();
   active_group_.default_kp = read_optional_value<double>(group_node, "default_kp", 25.0);
   active_group_.default_kd = read_optional_value<double>(group_node, "default_kd", 1.0);
 
@@ -190,14 +209,18 @@ void DmTrajectoryTestNode::load_test_config()
     }
   }
 
+  if (const YAML::Node csv_columns_node = group_node["csv_columns"]) {
+    if (!csv_columns_node.IsMap()) {
+      throw std::runtime_error("csv_columns must be a map in group: " + group_name);
+    }
+    for (const auto & item : csv_columns_node) {
+      active_group_.csv_column_names[item.first.as<std::string>()] = item.second.as<std::string>();
+    }
+  }
+
   std::unordered_map<std::string, size_t> joint_index_by_name;
   for (size_t index = 0; index < active_group_.joints.size(); ++index) {
     joint_index_by_name[active_group_.joints[index]] = index;
-  }
-
-  const YAML::Node points_node = trajectory_node["points"];
-  if (!points_node || !points_node.IsSequence() || points_node.size() == 0U) {
-    throw std::runtime_error("trajectory points must be a non-empty sequence");
   }
 
   active_trajectory_.name = trajectory_name_;
@@ -205,6 +228,23 @@ void DmTrajectoryTestNode::load_test_config()
   active_trajectory_.description = read_optional_value<std::string>(
     trajectory_node, "description", std::string());
   active_trajectory_.loop = read_optional_value<bool>(trajectory_node, "loop", false);
+  active_trajectory_.use_absolute_positions = false;
+  active_trajectory_.points.clear();
+
+  const auto csv_path_from_config = read_optional_value<std::string>(
+    trajectory_node, "csv_path", std::string());
+  const auto resolved_csv_path = !trajectory_csv_path_.empty() ?
+    resolve_path_relative_to_test_config(trajectory_csv_path_) :
+    resolve_path_relative_to_test_config(csv_path_from_config);
+  if (!resolved_csv_path.empty()) {
+    load_csv_trajectory(resolved_csv_path);
+    return;
+  }
+
+  const YAML::Node points_node = trajectory_node["points"];
+  if (!points_node || !points_node.IsSequence() || points_node.size() == 0U) {
+    throw std::runtime_error("trajectory points must be a non-empty sequence when csv_path is not used");
+  }
 
   std::vector<RawTrajectoryPoint> raw_points;
   raw_points.reserve(points_node.size());
@@ -270,6 +310,109 @@ void DmTrajectoryTestNode::load_test_config()
     active_trajectory_.points.empty() ? 0.0 : active_trajectory_.points.back().time_from_start;
 }
 
+void DmTrajectoryTestNode::load_csv_trajectory(const std::string & csv_path)
+{
+  std::ifstream input(csv_path);
+  if (!input.is_open()) {
+    throw std::runtime_error("failed to open trajectory csv: " + csv_path);
+  }
+
+  std::string header_line;
+  if (!std::getline(input, header_line)) {
+    throw std::runtime_error("trajectory csv is empty: " + csv_path);
+  }
+
+  const auto headers = split_csv_line(header_line);
+  if (headers.empty()) {
+    throw std::runtime_error("trajectory csv header is empty: " + csv_path);
+  }
+
+  const auto time_index = find_time_column_index(headers);
+  if (!time_index.has_value() && csv_row_rate_hz_ <= 0.0) {
+    throw std::runtime_error(
+      "trajectory csv is missing the configured time column and csv_row_rate_hz is not set: " +
+      time_column_name_);
+  }
+  const auto joint_column_indices = resolve_csv_joint_column_indices(headers);
+
+  std::vector<TrajectoryPoint> csv_points;
+  std::string line;
+  size_t line_number = 1U;
+  size_t data_row_index = 0U;
+  while (std::getline(input, line)) {
+    ++line_number;
+    if (trim_copy(line).empty()) {
+      continue;
+    }
+
+    const auto cells = split_csv_line(line);
+
+    TrajectoryPoint point;
+    if (time_index.has_value()) {
+      if (cells.size() <= *time_index) {
+        throw std::runtime_error(
+          "trajectory csv line is missing the time column at line " + std::to_string(line_number));
+      }
+
+      const auto time_cell = trim_copy(cells[*time_index]);
+      if (time_cell.empty()) {
+        continue;
+      }
+      point.time_from_start = std::stod(time_cell);
+    } else {
+      point.time_from_start = static_cast<double>(data_row_index) / csv_row_rate_hz_;
+    }
+
+    if (point.time_from_start < 0.0) {
+      throw std::runtime_error("trajectory csv time must be >= 0 at line " + std::to_string(line_number));
+    }
+
+    point.offsets.reserve(active_group_.joints.size());
+    for (size_t joint_index = 0; joint_index < active_group_.joints.size(); ++joint_index) {
+      const auto column_index = joint_column_indices[joint_index];
+      if (cells.size() <= column_index) {
+        throw std::runtime_error(
+          "trajectory csv line is missing joint column " +
+          active_group_.joints[joint_index] + " at line " + std::to_string(line_number));
+      }
+
+      const auto value_cell = trim_copy(cells[column_index]);
+      if (value_cell.empty()) {
+        throw std::runtime_error(
+          "trajectory csv joint value is empty for " + active_group_.joints[joint_index] +
+          " at line " + std::to_string(line_number));
+      }
+      point.offsets.push_back(std::stod(value_cell));
+    }
+
+    csv_points.push_back(std::move(point));
+    ++data_row_index;
+  }
+
+  if (csv_points.empty()) {
+    throw std::runtime_error("trajectory csv contains no valid data rows: " + csv_path);
+  }
+
+  std::sort(
+    csv_points.begin(), csv_points.end(),
+    [](const TrajectoryPoint & lhs, const TrajectoryPoint & rhs) {
+      return lhs.time_from_start < rhs.time_from_start;
+    });
+
+  for (size_t index = 1; index < csv_points.size(); ++index) {
+    if (csv_points[index].time_from_start <= csv_points[index - 1U].time_from_start + kTimeEpsilon) {
+      throw std::runtime_error("trajectory csv times must be strictly increasing");
+    }
+  }
+
+  active_trajectory_.name = trajectory_name_;
+  active_trajectory_.description =
+    "CSV trajectory loaded from " + csv_path;
+  active_trajectory_.use_absolute_positions = true;
+  active_trajectory_.points = std::move(csv_points);
+  active_trajectory_.duration = active_trajectory_.points.back().time_from_start;
+}
+
 void DmTrajectoryTestNode::validate_active_group_against_motor_config()
 {
   motor_configs_by_name_.clear();
@@ -300,6 +443,7 @@ void DmTrajectoryTestNode::start_test_session()
   std::ostringstream oss;
   oss << "trajectory=" << active_trajectory_.name
       << " loop=" << (active_trajectory_.loop ? "true" : "false")
+      << " playback_speed=" << playback_speed_
       << " duration=" << active_trajectory_.duration
       << " joints=";
   for (size_t index = 0; index < active_group_.joints.size(); ++index) {
@@ -373,7 +517,7 @@ void DmTrajectoryTestNode::timer_callback()
   }
 
   double sample_time = std::chrono::duration<double>(
-    std::chrono::steady_clock::now() - trajectory_start_time_).count();
+    std::chrono::steady_clock::now() - trajectory_start_time_).count() * playback_speed_;
 
   if (active_trajectory_.duration <= kTimeEpsilon) {
     sample_time = 0.0;
@@ -481,7 +625,8 @@ std::vector<dm_motor::NamedMitCommand> DmTrajectoryTestNode::build_commands(
   for (size_t joint_index = 0; joint_index < active_group_.joints.size(); ++joint_index) {
     const auto & joint_name = active_group_.joints[joint_index];
     const auto & motor_config = motor_configs_by_name_.at(joint_name);
-    const auto unclamped_position =
+    const auto unclamped_position = active_trajectory_.use_absolute_positions ?
+      sample.offsets[joint_index] :
       initial_positions_by_name_.at(joint_name) + sample.offsets[joint_index];
     const double position = std::clamp(
       unclamped_position,
@@ -623,6 +768,105 @@ DmTrajectoryTestNode::JointGain DmTrajectoryTestNode::gain_for_joint(
   }
 
   return JointGain {active_group_.default_kp, active_group_.default_kd};
+}
+
+std::vector<std::string> DmTrajectoryTestNode::split_csv_line(const std::string & line) const
+{
+  std::vector<std::string> cells;
+  std::string current;
+  bool in_quotes = false;
+
+  for (size_t index = 0; index < line.size(); ++index) {
+    const char ch = line[index];
+    if (ch == '"') {
+      if (in_quotes && index + 1U < line.size() && line[index + 1U] == '"') {
+        current.push_back('"');
+        ++index;
+      } else {
+        in_quotes = !in_quotes;
+      }
+      continue;
+    }
+
+    if (ch == ',' && !in_quotes) {
+      cells.push_back(current);
+      current.clear();
+      continue;
+    }
+
+    current.push_back(ch);
+  }
+
+  cells.push_back(current);
+  return cells;
+}
+
+std::optional<size_t> DmTrajectoryTestNode::find_time_column_index(
+  const std::vector<std::string> & headers) const
+{
+  const auto configured_name = to_lower_copy(trim_copy(time_column_name_));
+  for (size_t index = 0; index < headers.size(); ++index) {
+    if (to_lower_copy(trim_copy(headers[index])) == configured_name) {
+      return index;
+    }
+  }
+  return std::nullopt;
+}
+
+std::vector<size_t> DmTrajectoryTestNode::resolve_csv_joint_column_indices(
+  const std::vector<std::string> & headers) const
+{
+  std::vector<size_t> indices;
+  indices.reserve(active_group_.joints.size());
+
+  for (const auto & joint_name : active_group_.joints) {
+    const auto mapped_name_it = active_group_.csv_column_names.find(joint_name);
+    const auto expected_header_name = mapped_name_it != active_group_.csv_column_names.end() ?
+      mapped_name_it->second :
+      joint_name;
+    const auto normalized_joint_name = to_lower_copy(expected_header_name);
+    bool found = false;
+    for (size_t header_index = 0; header_index < headers.size(); ++header_index) {
+      if (to_lower_copy(trim_copy(headers[header_index])) == normalized_joint_name) {
+        indices.push_back(header_index);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      throw std::runtime_error(
+        "trajectory csv is missing a joint column named: " + expected_header_name);
+    }
+  }
+
+  return indices;
+}
+
+std::string DmTrajectoryTestNode::trim_copy(const std::string & value)
+{
+  size_t begin = 0U;
+  while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin])) != 0) {
+    ++begin;
+  }
+
+  size_t end = value.size();
+  while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1U])) != 0) {
+    --end;
+  }
+
+  return value.substr(begin, end - begin);
+}
+
+std::string DmTrajectoryTestNode::to_lower_copy(const std::string & value)
+{
+  std::string output = value;
+  std::transform(
+    output.begin(), output.end(), output.begin(),
+    [](const unsigned char ch) {
+      return static_cast<char>(std::tolower(ch));
+    });
+  return output;
 }
 
 }  // namespace dm_test

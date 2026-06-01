@@ -89,6 +89,26 @@ controller:
     - right_ankle_pitch
     - right_ankle_roll
 
+parallel_mechanisms:
+  - name: waist_parallel
+    config_path: parallel/waist.yaml
+    pitch_joint: waist_pitch
+    roll_joint: waist_roll
+    motor_1: waist_parallel_1
+    motor_2: waist_parallel_2
+  - name: left_ankle_parallel
+    config_path: parallel/left_ankle.yaml
+    pitch_joint: left_ankle_pitch
+    roll_joint: left_ankle_roll
+    motor_1: left_ankle_parallel_1
+    motor_2: left_ankle_parallel_2
+  - name: right_ankle_parallel
+    config_path: parallel/right_ankle.yaml
+    pitch_joint: right_ankle_pitch
+    roll_joint: right_ankle_roll
+    motor_1: right_ankle_parallel_1
+    motor_2: right_ankle_parallel_2
+
 joints:
   - name: waist_yaw
     initial_position: 0.0
