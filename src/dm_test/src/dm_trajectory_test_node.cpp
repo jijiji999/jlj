@@ -46,6 +46,8 @@ DmTrajectoryTestNode::DmTrajectoryTestNode()
   this->declare_parameter<double>("command_rate_hz", 100.0);
   this->declare_parameter<double>("playback_speed", 1.0);
   this->declare_parameter<double>("csv_row_rate_hz", 0.0);
+  this->declare_parameter<bool>("enable_pre_positioning", true);
+  this->declare_parameter<double>("pre_position_duration_sec", 5.0);
   this->declare_parameter<int>("command_timeout_ms", 20);
   this->declare_parameter<double>("start_delay_sec", 1.0);
   this->declare_parameter<bool>("auto_enable_on_start", true);
@@ -57,6 +59,8 @@ DmTrajectoryTestNode::DmTrajectoryTestNode()
   command_rate_hz_ = this->get_parameter("command_rate_hz").as_double();
   playback_speed_ = this->get_parameter("playback_speed").as_double();
   csv_row_rate_hz_ = this->get_parameter("csv_row_rate_hz").as_double();
+  enable_pre_positioning_ = this->get_parameter("enable_pre_positioning").as_bool();
+  pre_position_duration_sec_ = this->get_parameter("pre_position_duration_sec").as_double();
   command_timeout_ms_ = this->get_parameter("command_timeout_ms").as_int();
   start_delay_sec_ = this->get_parameter("start_delay_sec").as_double();
   auto_enable_on_start_ = this->get_parameter("auto_enable_on_start").as_bool();
@@ -70,6 +74,9 @@ DmTrajectoryTestNode::DmTrajectoryTestNode()
   }
   if (csv_row_rate_hz_ < 0.0) {
     throw std::runtime_error("csv_row_rate_hz must be >= 0");
+  }
+  if (pre_position_duration_sec_ < 0.0) {
+    throw std::runtime_error("pre_position_duration_sec must be >= 0");
   }
   if (command_timeout_ms_ < 0) {
     throw std::runtime_error("command_timeout_ms must be >= 0");
@@ -439,11 +446,14 @@ void DmTrajectoryTestNode::start_test_session()
   }
 
   warmup_start_time_ = std::chrono::steady_clock::now();
+  phase_ = ExecutionPhase::kWaitingForState;
 
   std::ostringstream oss;
   oss << "trajectory=" << active_trajectory_.name
       << " loop=" << (active_trajectory_.loop ? "true" : "false")
       << " playback_speed=" << playback_speed_
+      << " enable_pre_positioning=" << (enable_pre_positioning_ ? "true" : "false")
+      << " pre_position_duration_sec=" << pre_position_duration_sec_
       << " duration=" << active_trajectory_.duration
       << " joints=";
   for (size_t index = 0; index < active_group_.joints.size(); ++index) {
@@ -471,7 +481,7 @@ void DmTrajectoryTestNode::timer_callback()
 {
   update_latest_states();
 
-  if (!initial_positions_ready_) {
+  if (phase_ == ExecutionPhase::kWaitingForState) {
     const auto elapsed = std::chrono::duration<double>(
       std::chrono::steady_clock::now() - warmup_start_time_).count();
     if (elapsed < start_delay_sec_) {
@@ -501,7 +511,6 @@ void DmTrajectoryTestNode::timer_callback()
       return;
     }
 
-    trajectory_start_time_ = std::chrono::steady_clock::now();
     std::ostringstream initial_pose;
     for (size_t index = 0; index < active_group_.joints.size(); ++index) {
       const auto & joint_name = active_group_.joints[index];
@@ -512,29 +521,62 @@ void DmTrajectoryTestNode::timer_callback()
     }
     RCLCPP_INFO(
       this->get_logger(),
-      "Initial joint positions captured, starting trajectory. %s",
+      "Initial joint positions captured. %s",
       initial_pose.str().c_str());
-  }
 
-  double sample_time = std::chrono::duration<double>(
-    std::chrono::steady_clock::now() - trajectory_start_time_).count() * playback_speed_;
-
-  if (active_trajectory_.duration <= kTimeEpsilon) {
-    sample_time = 0.0;
-  } else if (active_trajectory_.loop) {
-    sample_time = std::fmod(sample_time, active_trajectory_.duration);
-  } else if (sample_time >= active_trajectory_.duration) {
-    sample_time = active_trajectory_.duration;
-    if (!completion_logged_) {
+    if (enable_pre_positioning_ && pre_position_duration_sec_ > kTimeEpsilon) {
+      pre_position_start_time_ = std::chrono::steady_clock::now();
+      phase_ = ExecutionPhase::kPrePositioning;
       RCLCPP_INFO(
         this->get_logger(),
-        "Trajectory %s reached its final point and will keep holding the final pose.",
-        active_trajectory_.name.c_str());
-      completion_logged_ = true;
+        "Starting slow pre-positioning phase for %.2f seconds before trajectory playback.",
+        pre_position_duration_sec_);
+    } else {
+      trajectory_start_time_ = std::chrono::steady_clock::now();
+      phase_ = ExecutionPhase::kTracking;
+      RCLCPP_INFO(this->get_logger(), "Pre-positioning skipped, starting trajectory playback.");
     }
   }
 
-  const auto sampled = sample_trajectory(sample_time);
+  SampledTrajectory sampled;
+  if (phase_ == ExecutionPhase::kPrePositioning) {
+    const double pre_position_elapsed = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - pre_position_start_time_).count();
+    const double progress_ratio =
+      pre_position_duration_sec_ <= kTimeEpsilon ?
+      1.0 :
+      std::clamp(pre_position_elapsed / pre_position_duration_sec_, 0.0, 1.0);
+
+    sampled = build_pre_position_sample(progress_ratio);
+
+    if (progress_ratio >= 1.0 - kTimeEpsilon) {
+      trajectory_start_time_ = std::chrono::steady_clock::now();
+      phase_ = ExecutionPhase::kTracking;
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Pre-positioning completed, entering trajectory tracking.");
+    }
+  } else {
+    double sample_time = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - trajectory_start_time_).count() * playback_speed_;
+
+    if (active_trajectory_.duration <= kTimeEpsilon) {
+      sample_time = 0.0;
+    } else if (active_trajectory_.loop) {
+      sample_time = std::fmod(sample_time, active_trajectory_.duration);
+    } else if (sample_time >= active_trajectory_.duration) {
+      sample_time = active_trajectory_.duration;
+      if (!completion_logged_) {
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Trajectory %s reached its final point and will keep holding the final pose.",
+          active_trajectory_.name.c_str());
+        completion_logged_ = true;
+      }
+    }
+
+    sampled = sample_trajectory(sample_time);
+  }
   std::vector<double> target_positions;
   std::vector<double> target_velocities;
   auto commands = build_commands(sampled, target_positions, target_velocities);
@@ -560,6 +602,40 @@ bool DmTrajectoryTestNode::capture_initial_positions()
   }
 
   return true;
+}
+
+DmTrajectoryTestNode::SampledTrajectory DmTrajectoryTestNode::build_pre_position_sample(
+  const double progress_ratio) const
+{
+  SampledTrajectory sample;
+  sample.offsets.assign(active_group_.joints.size(), 0.0);
+  sample.velocities.assign(active_group_.joints.size(), 0.0);
+
+  if (active_trajectory_.points.empty()) {
+    return sample;
+  }
+
+  const auto & trajectory_start = active_trajectory_.points.front().offsets;
+  const double clamped_ratio = std::clamp(progress_ratio, 0.0, 1.0);
+  const double blend_duration = std::max(pre_position_duration_sec_, kTimeEpsilon);
+
+  for (size_t joint_index = 0; joint_index < active_group_.joints.size(); ++joint_index) {
+    const auto & joint_name = active_group_.joints[joint_index];
+    const double current_position = initial_positions_by_name_.at(joint_name);
+    const double target_position = active_trajectory_.use_absolute_positions ?
+      trajectory_start[joint_index] :
+      initial_positions_by_name_.at(joint_name) + trajectory_start[joint_index];
+
+    sample.offsets[joint_index] = active_trajectory_.use_absolute_positions ?
+      current_position + clamped_ratio * (target_position - current_position) :
+      clamped_ratio * trajectory_start[joint_index];
+    sample.velocities[joint_index] =
+      clamped_ratio >= 1.0 - kTimeEpsilon ?
+      0.0 :
+      (target_position - current_position) / blend_duration;
+  }
+
+  return sample;
 }
 
 DmTrajectoryTestNode::SampledTrajectory DmTrajectoryTestNode::sample_trajectory(

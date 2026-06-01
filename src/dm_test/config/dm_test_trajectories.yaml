@@ -57,6 +57,55 @@ groups:
       right_wrist_pitch: right_wrist_pitch
       right_wrist_yaw: right_wrist_yaw
 
+  both_arms:
+    joints:
+      - left_shoulder_pitch
+      - left_shoulder_roll
+      - left_shoulder_yaw
+      - left_elbow
+      - left_wrist_roll
+      - left_wrist_pitch
+      - left_wrist_yaw
+      - right_shoulder_pitch
+      - right_shoulder_roll
+      - right_shoulder_yaw
+      - right_elbow
+      - right_wrist_roll
+      - right_wrist_pitch
+      - right_wrist_yaw
+    default_kp: 22.0
+    default_kd: 0.9
+    joint_gains:
+      left_shoulder_pitch: {kp: 30.0, kd: 1.2}
+      left_shoulder_roll: {kp: 28.0, kd: 1.1}
+      left_shoulder_yaw: {kp: 24.0, kd: 1.0}
+      left_elbow: {kp: 22.0, kd: 0.9}
+      left_wrist_roll: {kp: 12.0, kd: 0.4}
+      left_wrist_pitch: {kp: 12.0, kd: 0.4}
+      left_wrist_yaw: {kp: 10.0, kd: 0.35}
+      right_shoulder_pitch: {kp: 30.0, kd: 1.2}
+      right_shoulder_roll: {kp: 28.0, kd: 1.1}
+      right_shoulder_yaw: {kp: 24.0, kd: 1.0}
+      right_elbow: {kp: 22.0, kd: 0.9}
+      right_wrist_roll: {kp: 12.0, kd: 0.4}
+      right_wrist_pitch: {kp: 12.0, kd: 0.4}
+      right_wrist_yaw: {kp: 10.0, kd: 0.35}
+    csv_columns:
+      left_shoulder_pitch: left_shoulder_pitch
+      left_shoulder_roll: left_shoulder_roll
+      left_shoulder_yaw: left_shoulder_yaw
+      left_elbow: left_elbow
+      left_wrist_roll: left_wrist_roll
+      left_wrist_pitch: left_wrist_pitch
+      left_wrist_yaw: left_wrist_yaw
+      right_shoulder_pitch: right_shoulder_pitch
+      right_shoulder_roll: right_shoulder_roll
+      right_shoulder_yaw: right_shoulder_yaw
+      right_elbow: right_elbow
+      right_wrist_roll: right_wrist_roll
+      right_wrist_pitch: right_wrist_pitch
+      right_wrist_yaw: right_wrist_yaw
+
   left_leg:
     joints:
       - left_hip_pitch
@@ -170,6 +219,30 @@ trajectories:
           left_wrist_roll: 0.0
           left_wrist_pitch: 0.0
           left_wrist_yaw: 0.0
+
+  left_arm_swing_from_mjcf:
+    group: left_arm
+    loop: true
+    description: >
+      Absolute left-arm swing trajectory derived from the JLJBot MJCF model joint layout
+      and kept well inside the XML joint limits for slow initial tracking tests.
+    csv_path: left_arm_swing_from_mjcf.csv
+
+  right_arm_swing_from_mjcf:
+    group: right_arm
+    loop: true
+    description: >
+      Absolute right-arm swing trajectory mirrored from the left-arm swing for slow
+      initial tracking tests.
+    csv_path: right_arm_swing_from_mjcf.csv
+
+  both_arms_alternating_swing:
+    group: both_arms
+    loop: true
+    description: >
+      Absolute dual-arm alternating swing trajectory. The two arms move with opposite
+      phase to mimic walking-style arm alternation.
+    csv_path: both_arms_alternating_swing.csv
 
   right_arm_small_range:
     group: right_arm

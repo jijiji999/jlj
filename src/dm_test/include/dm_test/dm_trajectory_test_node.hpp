@@ -23,6 +23,13 @@ public:
   ~DmTrajectoryTestNode() override;
 
 private:
+  enum class ExecutionPhase
+  {
+    kWaitingForState = 0,
+    kPrePositioning = 1,
+    kTracking = 2,
+  };
+
   struct JointGain
   {
     double kp {25.0};
@@ -78,6 +85,7 @@ private:
 
   void timer_callback();
   bool capture_initial_positions();
+  SampledTrajectory build_pre_position_sample(double progress_ratio) const;
   SampledTrajectory sample_trajectory(double time_from_start) const;
   std::vector<dm_motor::NamedMitCommand> build_commands(
     const SampledTrajectory & sample,
@@ -118,14 +126,18 @@ private:
   double command_rate_hz_ {100.0};
   double playback_speed_ {1.0};
   double csv_row_rate_hz_ {0.0};
+  double pre_position_duration_sec_ {5.0};
+  bool enable_pre_positioning_ {true};
   int command_timeout_ms_ {20};
   double start_delay_sec_ {1.0};
   bool auto_enable_on_start_ {true};
   bool auto_disable_on_shutdown_ {false};
 
+  ExecutionPhase phase_ {ExecutionPhase::kWaitingForState};
   bool initial_positions_ready_ {false};
   bool completion_logged_ {false};
   std::chrono::steady_clock::time_point warmup_start_time_ {};
+  std::chrono::steady_clock::time_point pre_position_start_time_ {};
   std::chrono::steady_clock::time_point trajectory_start_time_ {};
 };
 

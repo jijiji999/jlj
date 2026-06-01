@@ -52,4 +52,15 @@ install(FILES README.md
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/evaluate_tracking.py
+  scripts/realtime_plot_tracking.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES
+  scripts/example_error_joint_states.csv
+  DESTINATION share/${PROJECT_NAME}/scripts
+)
+
 ament_package()

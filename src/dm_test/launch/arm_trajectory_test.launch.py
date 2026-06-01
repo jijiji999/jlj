@@ -21,6 +21,8 @@ def generate_launch_description():
             DeclareLaunchArgument("command_rate_hz", default_value="100.0"),
             DeclareLaunchArgument("playback_speed", default_value="1.0"),
             DeclareLaunchArgument("csv_row_rate_hz", default_value="0.0"),
+            DeclareLaunchArgument("enable_pre_positioning", default_value="true"),
+            DeclareLaunchArgument("pre_position_duration_sec", default_value="5.0"),
             DeclareLaunchArgument("command_timeout_ms", default_value="20"),
             DeclareLaunchArgument("start_delay_sec", default_value="1.0"),
             DeclareLaunchArgument("auto_enable_on_start", default_value="true"),
@@ -39,6 +41,12 @@ def generate_launch_description():
                         "command_rate_hz": LaunchConfiguration("command_rate_hz"),
                         "playback_speed": LaunchConfiguration("playback_speed"),
                         "csv_row_rate_hz": LaunchConfiguration("csv_row_rate_hz"),
+                        "enable_pre_positioning": LaunchConfiguration(
+                            "enable_pre_positioning"
+                        ),
+                        "pre_position_duration_sec": LaunchConfiguration(
+                            "pre_position_duration_sec"
+                        ),
                         "command_timeout_ms": LaunchConfiguration("command_timeout_ms"),
                         "start_delay_sec": LaunchConfiguration("start_delay_sec"),
                         "auto_enable_on_start": LaunchConfiguration(
