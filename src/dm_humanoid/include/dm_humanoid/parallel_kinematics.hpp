@@ -116,6 +116,11 @@ private:
     double motor_2,
     Eigen::Matrix2d & jacobian,
     int & error_state) const;
+  bool compute_numerical_inverse_jacobian(
+    double pitch,
+    double roll,
+    Eigen::Matrix2d & jacobian,
+    int & error_state) const;
   bool is_loaded() const;
 
   MechanismParams params_ {};

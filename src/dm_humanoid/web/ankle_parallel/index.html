@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ankle Parallel Joint Tester</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Parallel Joint Validation</p>
+          <h1>双踝并联机构可视化解算测试台</h1>
+          <p>
+            每一侧都支持两种模式二选一：逆解模式下拖动虚拟关节 <code>pitch / roll</code>，
+            正解模式下拖动两个电机角度。两种模式都要先点一次 <code>解算</code>，确认结果后再点 <code>发送</code>。
+          </p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span>Backend</span>
+            <strong id="backend-status">Connecting...</strong>
+          </div>
+          <div class="stat-card">
+            <span>Pairs</span>
+            <strong>Left / Right Ankle</strong>
+          </div>
+          <div class="stat-card">
+            <span>Refresh</span>
+            <strong>100 ms</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-grid">
+        <article class="panel ankle-panel" data-side="left">
+          <header class="panel-header">
+            <div>
+              <p class="panel-tag">Left Side</p>
+              <h2>左踝并联机构</h2>
+            </div>
+            <div class="panel-meta">
+              <span class="motor-pair">left_ankle_parallel_1 / left_ankle_parallel_2</span>
+            </div>
+          </header>
+
+          <section class="toolbar">
+            <div class="toolbar-left">
+              <button class="enable-button action-button">Enable Pair</button>
+              <button class="disable-button ghost-button">Disable Pair</button>
+              <button class="reset-button ghost-button">Reset Zero</button>
+            </div>
+            <div class="toolbar-right">
+              <label class="mode-switch">
+                <input class="mode-radio" type="radio" name="mode-left" value="joint" checked />
+                <span>逆解模式</span>
+              </label>
+              <label class="mode-switch">
+                <input class="mode-radio" type="radio" name="mode-left" value="motor" />
+                <span>正解模式</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="input-section">
+            <h3>虚拟关节输入</h3>
+            <div class="slider-block">
+              <label>Pitch <strong class="pitch-value">0.000</strong></label>
+              <input class="pitch-slider" type="range" min="-0.87267" max="0.5236" step="0.001" value="0.0" />
+            </div>
+            <div class="slider-block">
+              <label>Roll <strong class="roll-value">0.000</strong></label>
+              <input class="roll-slider" type="range" min="-0.2618" max="0.2618" step="0.001" value="0.0" />
+            </div>
+          </section>
+
+          <section class="input-section motor-space-section">
+            <h3>电机角度输入</h3>
+            <div class="slider-block">
+              <label>Motor 1 Angle <strong class="motor1-value">0.000</strong></label>
+              <input class="motor1-slider" type="range" min="-12.5" max="12.5" step="0.001" value="0.0" />
+            </div>
+            <div class="slider-block">
+              <label>Motor 2 Angle <strong class="motor2-value">0.000</strong></label>
+              <input class="motor2-slider" type="range" min="-12.5" max="12.5" step="0.001" value="0.0" />
+            </div>
+          </section>
+
+          <section class="gain-section">
+            <div class="slider-block">
+              <label>Kp <strong class="kp-value">45.000</strong></label>
+              <input class="kp-slider" type="range" min="0" max="120" step="0.1" value="45.0" />
+            </div>
+            <div class="slider-block">
+              <label>Kd <strong class="kd-value">1.400</strong></label>
+              <input class="kd-slider" type="range" min="0" max="10" step="0.01" value="1.4" />
+            </div>
+          </section>
+
+          <div class="command-actions">
+            <button class="solve-button action-button">解算</button>
+            <button class="send-button action-button">发送</button>
+          </div>
+
+          <div class="state-grid">
+            <div><span>实时 Pitch</span><strong class="state-pitch">0.000</strong></div>
+            <div><span>实时 Roll</span><strong class="state-roll">0.000</strong></div>
+            <div><span>Motor 1 Pos</span><strong class="state-m1-pos">0.000</strong></div>
+            <div><span>Motor 2 Pos</span><strong class="state-m2-pos">0.000</strong></div>
+            <div><span>Motor 1 Vel</span><strong class="state-m1-vel">0.000</strong></div>
+            <div><span>Motor 2 Vel</span><strong class="state-m2-vel">0.000</strong></div>
+            <div><span>Motor 1 Torque</span><strong class="state-m1-torque">0.000</strong></div>
+            <div><span>Motor 2 Torque</span><strong class="state-m2-torque">0.000</strong></div>
+          </div>
+
+          <div class="status-line preview-line">
+            <span>解算结果</span>
+            <strong class="preview-message">尚未解算</strong>
+          </div>
+          <p class="command-message message">等待操作</p>
+          <div class="status-line">
+            <span>发送状态</span>
+            <strong class="state-message">Waiting...</strong>
+          </div>
+        </article>
+
+        <article class="panel ankle-panel" data-side="right">
+          <header class="panel-header">
+            <div>
+              <p class="panel-tag">Right Side</p>
+              <h2>右踝并联机构</h2>
+            </div>
+            <div class="panel-meta">
+              <span class="motor-pair">right_ankle_parallel_1 / right_ankle_parallel_2</span>
+            </div>
+          </header>
+
+          <section class="toolbar">
+            <div class="toolbar-left">
+              <button class="enable-button action-button">Enable Pair</button>
+              <button class="disable-button ghost-button">Disable Pair</button>
+              <button class="reset-button ghost-button">Reset Zero</button>
+            </div>
+            <div class="toolbar-right">
+              <label class="mode-switch">
+                <input class="mode-radio" type="radio" name="mode-right" value="joint" checked />
+                <span>逆解模式</span>
+              </label>
+              <label class="mode-switch">
+                <input class="mode-radio" type="radio" name="mode-right" value="motor" />
+                <span>正解模式</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="input-section">
+            <h3>虚拟关节输入</h3>
+            <div class="slider-block">
+              <label>Pitch <strong class="pitch-value">0.000</strong></label>
+              <input class="pitch-slider" type="range" min="-0.87267" max="0.5236" step="0.001" value="0.0" />
+            </div>
+            <div class="slider-block">
+              <label>Roll <strong class="roll-value">0.000</strong></label>
+              <input class="roll-slider" type="range" min="-0.2618" max="0.2618" step="0.001" value="0.0" />
+            </div>
+          </section>
+
+          <section class="input-section motor-space-section">
+            <h3>电机角度输入</h3>
+            <div class="slider-block">
+              <label>Motor 1 Angle <strong class="motor1-value">0.000</strong></label>
+              <input class="motor1-slider" type="range" min="-12.5" max="12.5" step="0.001" value="0.0" />
+            </div>
+            <div class="slider-block">
+              <label>Motor 2 Angle <strong class="motor2-value">0.000</strong></label>
+              <input class="motor2-slider" type="range" min="-12.5" max="12.5" step="0.001" value="0.0" />
+            </div>
+          </section>
+
+          <section class="gain-section">
+            <div class="slider-block">
+              <label>Kp <strong class="kp-value">45.000</strong></label>
+              <input class="kp-slider" type="range" min="0" max="120" step="0.1" value="45.0" />
+            </div>
+            <div class="slider-block">
+              <label>Kd <strong class="kd-value">1.400</strong></label>
+              <input class="kd-slider" type="range" min="0" max="10" step="0.01" value="1.4" />
+            </div>
+          </section>
+
+          <div class="command-actions">
+            <button class="solve-button action-button">解算</button>
+            <button class="send-button action-button">发送</button>
+          </div>
+
+          <div class="state-grid">
+            <div><span>实时 Pitch</span><strong class="state-pitch">0.000</strong></div>
+            <div><span>实时 Roll</span><strong class="state-roll">0.000</strong></div>
+            <div><span>Motor 1 Pos</span><strong class="state-m1-pos">0.000</strong></div>
+            <div><span>Motor 2 Pos</span><strong class="state-m2-pos">0.000</strong></div>
+            <div><span>Motor 1 Vel</span><strong class="state-m1-vel">0.000</strong></div>
+            <div><span>Motor 2 Vel</span><strong class="state-m2-vel">0.000</strong></div>
+            <div><span>Motor 1 Torque</span><strong class="state-m1-torque">0.000</strong></div>
+            <div><span>Motor 2 Torque</span><strong class="state-m2-torque">0.000</strong></div>
+          </div>
+
+          <div class="status-line preview-line">
+            <span>解算结果</span>
+            <strong class="preview-message">尚未解算</strong>
+          </div>
+          <p class="command-message message">等待操作</p>
+          <div class="status-line">
+            <span>发送状态</span>
+            <strong class="state-message">Waiting...</strong>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

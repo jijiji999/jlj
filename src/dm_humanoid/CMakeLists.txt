@@ -42,9 +42,21 @@ add_executable(dm_humanoid_control_node
   src/dm_humanoid_control_node.cpp
 )
 
+add_executable(ankle_parallel_web_node
+  src/ankle_parallel_web_node.cpp
+  src/ankle_parallel_web_main.cpp
+)
+
 target_compile_features(dm_humanoid_control_node PUBLIC cxx_std_17)
+target_compile_features(ankle_parallel_web_node PUBLIC cxx_std_17)
 
 target_include_directories(dm_humanoid_control_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_include_directories(ankle_parallel_web_node
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -59,14 +71,26 @@ ament_target_dependencies(dm_humanoid_control_node
   tf2
 )
 
+ament_target_dependencies(ankle_parallel_web_node
+  ament_index_cpp
+  dm_motor
+  rclcpp
+)
+
 target_link_libraries(dm_humanoid_control_node
   dm_humanoid_parallel
   dm_motor::dm_motor_core
   yaml-cpp
 )
 
+target_link_libraries(ankle_parallel_web_node
+  dm_humanoid_parallel
+  dm_motor::dm_motor_core
+  yaml-cpp
+)
+
 install(
-  TARGETS dm_humanoid_control_node dm_humanoid_parallel
+  TARGETS dm_humanoid_control_node ankle_parallel_web_node dm_humanoid_parallel
   EXPORT export_dm_humanoid_parallel
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -78,6 +102,10 @@ install(DIRECTORY include/
 )
 
 install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY web
   DESTINATION share/${PROJECT_NAME}
 )
 

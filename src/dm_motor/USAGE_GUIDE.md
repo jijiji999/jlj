@@ -155,6 +155,12 @@ pkill cannelloni
   `Kp = 27`
   `Kd = 3.7`
 
+说明：
+
+- 现在 `default_kp / default_kd` 已经支持按每个关节单独配置
+- 如果某个关节在 YAML 里写了自己的 `default_kp / default_kd`，将优先使用该关节的值
+- 如果没写，才回退到按电机型号生成的默认值
+
 总线分配如下：
 
 - `vcan0`：`waist_yaw` + 左臂全部

@@ -16,7 +16,10 @@ namespace
 
 constexpr double kSmallValue = 1.0e-10;
 constexpr double kForwardTolerance = 1.0e-6;
-constexpr int kForwardMaxIterations = 100;
+constexpr int kForwardMaxIterations = 150;
+constexpr double kFiniteDifferenceStep = 1.0e-4;
+constexpr double kForwardStepScale = 0.6;
+constexpr double kForwardMaxCorrection = 0.15;
 
 Eigen::Vector3d read_vector3(const YAML::Node & node, const char * key)
 {
@@ -168,6 +171,13 @@ bool ParallelKinematics::forward(
   pitch = pitch_seed;
   roll = roll_seed;
 
+  if (pitch < params_.pitch_limits.min || pitch > params_.pitch_limits.max) {
+    pitch = 0.5 * (params_.pitch_limits.min + params_.pitch_limits.max);
+  }
+  if (roll < params_.roll_limits.min || roll > params_.roll_limits.max) {
+    roll = 0.5 * (params_.roll_limits.min + params_.roll_limits.max);
+  }
+
   for (int iteration = 0; iteration < kForwardMaxIterations; ++iteration) {
     pitch = std::clamp(pitch, params_.pitch_limits.min, params_.pitch_limits.max);
     roll = std::clamp(roll, params_.roll_limits.min, params_.roll_limits.max);
@@ -195,13 +205,22 @@ bool ParallelKinematics::forward(
 
     Eigen::Matrix2d jacobian;
     int error_state = 0;
-    if (!compute_jacobian(pitch, roll, solved_motor_1, solved_motor_2, jacobian, error_state)) {
+    if (!compute_numerical_inverse_jacobian(pitch, roll, jacobian, error_state)) {
       error_message = "Forward solve failed during Jacobian step, error_state=" +
         std::to_string(error_state);
       return false;
     }
 
-    const Eigen::Vector2d delta_roll_pitch = jacobian.inverse() * motor_error;
+    Eigen::Vector2d delta_roll_pitch = jacobian.inverse() * motor_error;
+    delta_roll_pitch[0] = std::clamp(
+      delta_roll_pitch[0] * kForwardStepScale,
+      -kForwardMaxCorrection,
+      kForwardMaxCorrection);
+    delta_roll_pitch[1] = std::clamp(
+      delta_roll_pitch[1] * kForwardStepScale,
+      -kForwardMaxCorrection,
+      kForwardMaxCorrection);
+
     roll -= delta_roll_pitch[0];
     pitch -= delta_roll_pitch[1];
   }
@@ -378,6 +397,60 @@ bool ParallelKinematics::compute_jacobian(
   }
 
   jacobian = motor_space_matrix.inverse() * Eigen::Matrix2d::Identity();
+  error_state = 0;
+  return true;
+}
+
+bool ParallelKinematics::compute_numerical_inverse_jacobian(
+  const double pitch,
+  const double roll,
+  Eigen::Matrix2d & jacobian,
+  int & error_state) const
+{
+  double base_motor_1 = 0.0;
+  double base_motor_2 = 0.0;
+  std::string error_message;
+  if (!inverse(pitch, roll, base_motor_1, base_motor_2, error_message)) {
+    error_state = 1;
+    return false;
+  }
+
+  const double pitch_plus = std::clamp(
+    pitch + kFiniteDifferenceStep,
+    params_.pitch_limits.min,
+    params_.pitch_limits.max);
+  const double roll_plus = std::clamp(
+    roll + kFiniteDifferenceStep,
+    params_.roll_limits.min,
+    params_.roll_limits.max);
+
+  double pitch_motor_1 = 0.0;
+  double pitch_motor_2 = 0.0;
+  if (!inverse(pitch_plus, roll, pitch_motor_1, pitch_motor_2, error_message)) {
+    error_state = 2;
+    return false;
+  }
+
+  double roll_motor_1 = 0.0;
+  double roll_motor_2 = 0.0;
+  if (!inverse(pitch, roll_plus, roll_motor_1, roll_motor_2, error_message)) {
+    error_state = 3;
+    return false;
+  }
+
+  const double pitch_step = std::max(kFiniteDifferenceStep, std::abs(pitch_plus - pitch));
+  const double roll_step = std::max(kFiniteDifferenceStep, std::abs(roll_plus - roll));
+
+  jacobian(0, 0) = (roll_motor_1 - base_motor_1) / roll_step;
+  jacobian(1, 0) = (roll_motor_2 - base_motor_2) / roll_step;
+  jacobian(0, 1) = (pitch_motor_1 - base_motor_1) / pitch_step;
+  jacobian(1, 1) = (pitch_motor_2 - base_motor_2) / pitch_step;
+
+  if (std::abs(jacobian.determinant()) < kSmallValue) {
+    error_state = 4;
+    return false;
+  }
+
   error_state = 0;
   return true;
 }
