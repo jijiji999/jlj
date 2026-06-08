@@ -36,6 +36,20 @@ float normalizeAxisValue(int16_t raw_value, double deadzone)
   const double scaled = (magnitude - deadzone) / (1.0 - deadzone);
   return static_cast<float>(std::copysign(scaled, raw));
 }
+
+bool shouldInvertAxis(std::size_t axis_index, bool invert_left_stick_y, bool invert_right_stick_y, bool invert_dpad_y)
+{
+  if (axis_index == 1) {
+    return invert_left_stick_y;
+  }
+  if (axis_index == 4) {
+    return invert_right_stick_y;
+  }
+  if (axis_index == 7) {
+    return invert_dpad_y;
+  }
+  return false;
+}
 }  // namespace
 
 class DmJoyNode : public rclcpp::Node
@@ -45,13 +59,16 @@ public:
   : Node("dm_joy_node")
   {
     this->declare_parameter<std::string>(
-      "device_path", "/dev/input/by-id/usb-S_TGZ_Controller_3E529620-joystick");
+      "device_path", "/dev/input/by-id/usb-S_TGZ_Controller_3E529690-joystick");
     this->declare_parameter<std::string>("joy_topic", "joy");
     this->declare_parameter<std::string>("frame_id", "joy_link");
     this->declare_parameter<double>("deadzone", 0.05);
     this->declare_parameter<double>("autorepeat_rate", 20.0);
     this->declare_parameter<int>("poll_interval_ms", 10);
     this->declare_parameter<int>("reconnect_interval_ms", 1000);
+    this->declare_parameter<bool>("invert_left_stick_y", true);
+    this->declare_parameter<bool>("invert_right_stick_y", true);
+    this->declare_parameter<bool>("invert_dpad_y", true);
 
     device_path_ = this->get_parameter("device_path").as_string();
     joy_topic_ = this->get_parameter("joy_topic").as_string();
@@ -60,6 +77,9 @@ public:
     autorepeat_rate_ = this->get_parameter("autorepeat_rate").as_double();
     poll_interval_ms_ = this->get_parameter("poll_interval_ms").as_int();
     reconnect_interval_ms_ = this->get_parameter("reconnect_interval_ms").as_int();
+    invert_left_stick_y_ = this->get_parameter("invert_left_stick_y").as_bool();
+    invert_right_stick_y_ = this->get_parameter("invert_right_stick_y").as_bool();
+    invert_dpad_y_ = this->get_parameter("invert_dpad_y").as_bool();
 
     if (deadzone_ < 0.0) {
       deadzone_ = 0.0;
@@ -79,8 +99,11 @@ public:
 
     RCLCPP_INFO(
       this->get_logger(),
-      "dm_joy_node started. device=%s topic=%s",
-      device_path_.c_str(), joy_topic_.c_str());
+      "dm_joy_node started. device=%s topic=%s invert_left_stick_y=%s invert_right_stick_y=%s invert_dpad_y=%s",
+      device_path_.c_str(), joy_topic_.c_str(),
+      invert_left_stick_y_ ? "true" : "false",
+      invert_right_stick_y_ ? "true" : "false",
+      invert_dpad_y_ ? "true" : "false");
   }
 
   ~DmJoyNode() override
@@ -187,7 +210,13 @@ private:
       if (raw_event.number >= joy_msg_.axes.size()) {
         return false;
       }
-      joy_msg_.axes[raw_event.number] = normalizeAxisValue(raw_event.value, deadzone_);
+      float normalized = normalizeAxisValue(raw_event.value, deadzone_);
+      if (shouldInvertAxis(
+          raw_event.number, invert_left_stick_y_, invert_right_stick_y_, invert_dpad_y_))
+      {
+        normalized = -normalized;
+      }
+      joy_msg_.axes[raw_event.number] = normalized;
       return true;
     }
 
@@ -226,6 +255,9 @@ private:
   double autorepeat_rate_{20.0};
   int poll_interval_ms_{10};
   int reconnect_interval_ms_{1000};
+  bool invert_left_stick_y_{true};
+  bool invert_right_stick_y_{true};
+  bool invert_dpad_y_{true};
   int joy_fd_{-1};
   bool is_open_{false};
   rclcpp::Time last_reconnect_attempt_{0, 0, RCL_ROS_TIME};

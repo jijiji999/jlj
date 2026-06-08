@@ -53,6 +53,7 @@ AnkleParallelWebNode::AnkleParallelWebNode()
 : Node("ankle_parallel_web_node")
 {
   this->declare_parameter<std::string>("motor_config_path", "");
+  this->declare_parameter<std::string>("waist_solver_config_path", "");
   this->declare_parameter<std::string>("left_solver_config_path", "");
   this->declare_parameter<std::string>("right_solver_config_path", "");
   this->declare_parameter<std::string>("web_root", "");
@@ -64,6 +65,9 @@ AnkleParallelWebNode::AnkleParallelWebNode()
 
   const auto motor_config_path = resolve_motor_config_path(
     this->get_parameter("motor_config_path").as_string());
+  const auto waist_solver_config_path = resolve_solver_config_path(
+    this->get_parameter("waist_solver_config_path").as_string(),
+    "waist.yaml");
   const auto left_solver_config_path = resolve_solver_config_path(
     this->get_parameter("left_solver_config_path").as_string(),
     "left_ankle.yaml");
@@ -76,6 +80,11 @@ AnkleParallelWebNode::AnkleParallelWebNode()
   command_timeout_ms_ = this->get_parameter("command_timeout_ms").as_int();
   poll_interval_ms_ = this->get_parameter("poll_interval_ms").as_int();
   continuous_rate_hz_ = this->get_parameter("continuous_rate_hz").as_int();
+
+  waist_rig_.side = "waist";
+  waist_rig_.display_name = "Waist";
+  waist_rig_.motor_1_name = "waist_parallel_1";
+  waist_rig_.motor_2_name = "waist_parallel_2";
 
   left_rig_.side = "left";
   left_rig_.display_name = "Left Ankle";
@@ -90,6 +99,9 @@ AnkleParallelWebNode::AnkleParallelWebNode()
   manager_ = std::make_unique<dm_motor::DmMotorManager>(motor_config_path);
 
   std::string solver_error;
+  if (!waist_rig_.kinematics.load_from_yaml(waist_solver_config_path, solver_error)) {
+    throw std::runtime_error("Failed to load waist solver config: " + solver_error);
+  }
   if (!left_rig_.kinematics.load_from_yaml(left_solver_config_path, solver_error)) {
     throw std::runtime_error("Failed to load left ankle solver config: " + solver_error);
   }
@@ -108,6 +120,13 @@ AnkleParallelWebNode::AnkleParallelWebNode()
     [this]() {
       std::string status_message;
       bool success = false;
+      if (waist_rig_.latest_command.continuous_enabled) {
+        (void)send_parallel_command(waist_rig_, waist_rig_.latest_command, status_message, success);
+      }
+      if (waist_rig_.latest_motor_command.continuous_enabled) {
+        (void)send_motor_space_command(
+          waist_rig_, waist_rig_.latest_motor_command, status_message, success);
+      }
       if (left_rig_.latest_command.continuous_enabled) {
         (void)send_parallel_command(left_rig_, left_rig_.latest_command, status_message, success);
       }
@@ -409,7 +428,8 @@ AnkleParallelWebNode::HttpResponse AnkleParallelWebNode::handle_api_state()
   };
 
   const std::string body =
-    "{\"success\":true,\"left\":" + serialize_rig(left_rig_) +
+    "{\"success\":true,\"waist\":" + serialize_rig(waist_rig_) +
+    ",\"left\":" + serialize_rig(left_rig_) +
     ",\"right\":" + serialize_rig(right_rig_) + "}";
   return make_json_response(body, 200);
 }
@@ -454,6 +474,8 @@ AnkleParallelWebNode::HttpResponse AnkleParallelWebNode::handle_api_disable(cons
   rig->latest_command.continuous_enabled = false;
   rig->latest_motor_command.continuous_enabled = false;
   if (
+    !waist_rig_.latest_command.continuous_enabled &&
+    !waist_rig_.latest_motor_command.continuous_enabled &&
     !left_rig_.latest_command.continuous_enabled &&
     !left_rig_.latest_motor_command.continuous_enabled &&
     !right_rig_.latest_command.continuous_enabled &&
@@ -599,6 +621,13 @@ AnkleParallelWebNode::HttpResponse AnkleParallelWebNode::handle_api_command(cons
       [this]() {
         std::string status_message;
         bool success = false;
+        if (waist_rig_.latest_command.continuous_enabled) {
+          (void)send_parallel_command(waist_rig_, waist_rig_.latest_command, status_message, success);
+        }
+        if (waist_rig_.latest_motor_command.continuous_enabled) {
+          (void)send_motor_space_command(
+            waist_rig_, waist_rig_.latest_motor_command, status_message, success);
+        }
         if (left_rig_.latest_command.continuous_enabled) {
           (void)send_parallel_command(left_rig_, left_rig_.latest_command, status_message, success);
         }
@@ -654,6 +683,8 @@ AnkleParallelWebNode::HttpResponse AnkleParallelWebNode::handle_api_command(cons
     rig->latest_command.continuous_enabled = false;
     rig->latest_motor_command.continuous_enabled = false;
     if (
+      !waist_rig_.latest_command.continuous_enabled &&
+      !waist_rig_.latest_motor_command.continuous_enabled &&
       !left_rig_.latest_command.continuous_enabled &&
       !left_rig_.latest_motor_command.continuous_enabled &&
       !right_rig_.latest_command.continuous_enabled &&
@@ -681,6 +712,8 @@ AnkleParallelWebNode::HttpResponse AnkleParallelWebNode::handle_api_stop(const s
   rig->latest_command.continuous_enabled = false;
   rig->latest_motor_command.continuous_enabled = false;
   if (
+    !waist_rig_.latest_command.continuous_enabled &&
+    !waist_rig_.latest_motor_command.continuous_enabled &&
     !left_rig_.latest_command.continuous_enabled &&
     !left_rig_.latest_motor_command.continuous_enabled &&
     !right_rig_.latest_command.continuous_enabled &&
@@ -1062,6 +1095,9 @@ bool AnkleParallelWebNode::update_feedback_cache()
 
 AnkleParallelWebNode::AnkleRig * AnkleParallelWebNode::find_rig(const std::string & side)
 {
+  if (side == "waist") {
+    return &waist_rig_;
+  }
   if (side == "left") {
     return &left_rig_;
   }
@@ -1073,6 +1109,9 @@ AnkleParallelWebNode::AnkleRig * AnkleParallelWebNode::find_rig(const std::strin
 
 const AnkleParallelWebNode::AnkleRig * AnkleParallelWebNode::find_rig(const std::string & side) const
 {
+  if (side == "waist") {
+    return &waist_rig_;
+  }
   if (side == "left") {
     return &left_rig_;
   }

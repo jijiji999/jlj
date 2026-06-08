@@ -105,6 +105,10 @@ install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
 install(DIRECTORY web
   DESTINATION share/${PROJECT_NAME}
 )

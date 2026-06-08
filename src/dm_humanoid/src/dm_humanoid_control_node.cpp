@@ -126,10 +126,14 @@ struct ModeGains
 
 struct JoyMapping
 {
-  int fixed_button {0};
-  int passive_button {1};
-  int dance_button {2};
-  int loco_button {3};
+  int mode_confirm_button {0};
+  int fixed_modifier_button {4};
+  int passive_modifier_axis {2};
+  int loco_modifier_button {5};
+  int dance_modifier_axis {5};
+  float passive_modifier_axis_sign {1.0F};
+  float dance_modifier_axis_sign {1.0F};
+  float trigger_activation_threshold {0.5F};
   int linear_x_axis {1};
   int linear_y_axis {0};
   int yaw_axis {3};
@@ -165,7 +169,9 @@ struct PolicyConfig
 struct JointControlConfig
 {
   std::string name;
+  std::optional<std::string> gain_profile_name;
   std::optional<float> configured_initial_position;
+  std::optional<float> configured_fixed_position;
   float initial_position {0.0F};
   bool initial_position_ready {false};
   ModeGains fixed_gains {};
@@ -174,6 +180,14 @@ struct JointControlConfig
   ModeGains dance_gains {};
   float action_scale {0.25F};
   float action_offset {0.0F};
+};
+
+struct GainProfile
+{
+  ModeGains fixed {};
+  ModeGains passive {};
+  ModeGains loco {};
+  ModeGains dance {};
 };
 
 struct ParallelMechanismConfig
@@ -200,6 +214,16 @@ bool joy_button_pressed(const sensor_msgs::msg::Joy & message, const int index)
     return false;
   }
   return message.buttons[static_cast<size_t>(index)] != 0;
+}
+
+bool joy_axis_activated(
+  const sensor_msgs::msg::Joy & message,
+  const int index,
+  const float direction_sign,
+  const float activation_threshold)
+{
+  const float axis_value = joy_axis_or_zero(message, index);
+  return direction_sign * axis_value >= activation_threshold;
 }
 
 std::array<float, 3> compute_projected_gravity(const sensor_msgs::msg::Imu & imu)
@@ -375,9 +399,13 @@ public:
   {
     this->declare_parameter<std::string>("config_path", "");
     this->declare_parameter<std::string>("motor_config_path", "");
+    this->declare_parameter<std::string>("joy_topic", "");
     this->declare_parameter<std::string>("startup_mode", "");
     this->declare_parameter<std::string>("policy_model_path", "");
+    this->declare_parameter<std::string>("mode_command_topic", "");
     this->declare_parameter<double>("control_hz", 0.0);
+    this->declare_parameter<int>("command_timeout_ms", 0);
+    this->declare_parameter<bool>("fixed_passive_test_only", false);
 
     controller_config_path_ = resolve_controller_config_path(
       this->get_parameter("config_path").as_string());
@@ -394,6 +422,9 @@ public:
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
       imu_topic_, 20,
       std::bind(&DmHumanoidControlNode::imu_callback, this, std::placeholders::_1));
+    mode_command_sub_ = this->create_subscription<std_msgs::msg::String>(
+      mode_command_topic_, 20,
+      std::bind(&DmHumanoidControlNode::mode_command_callback, this, std::placeholders::_1));
 
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 20);
     raw_joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
@@ -438,6 +469,12 @@ public:
       joy_topic_.c_str(),
       imu_topic_.c_str(),
       policy_backend_->description().c_str());
+    if (fixed_passive_test_only_) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "fixed_passive_test_only is enabled. mode_command_topic=%s",
+        mode_command_topic_.c_str());
+    }
   }
 
   ~DmHumanoidControlNode() override
@@ -549,6 +586,8 @@ private:
     imu_topic_ = read_optional_value<std::string>(controller, "imu_topic", "imu/data");
     mode_topic_ = read_optional_value<std::string>(
       controller, "mode_topic", "humanoid_control/mode");
+    mode_command_topic_ = read_optional_value<std::string>(
+      controller, "mode_command_topic", "humanoid_control/mode_command");
     control_hz_ = read_optional_value<double>(controller, "control_hz", 100.0);
     command_timeout_ms_ = read_optional_value<int>(controller, "command_timeout_ms", 5);
     rx_poll_timeout_ms_ = read_optional_value<int>(controller, "rx_poll_timeout_ms", 0);
@@ -557,16 +596,30 @@ private:
       controller, "auto_disable_on_shutdown", true);
     publish_policy_debug_topics_ = read_optional_value<bool>(
       controller, "publish_policy_debug_topics", true);
+    fixed_passive_test_only_ = read_optional_value<bool>(
+      controller, "fixed_passive_test_only", false);
 
     const auto startup_mode_name = read_optional_value<std::string>(
       controller, "startup_mode", "passive");
     startup_mode_ = parse_mode(startup_mode_name).value_or(RobotMode::kPassive);
 
     const YAML::Node joystick = controller["joystick"];
-    joy_mapping_.fixed_button = read_optional_value<int>(joystick, "fixed_button", 0);
-    joy_mapping_.passive_button = read_optional_value<int>(joystick, "passive_button", 1);
-    joy_mapping_.dance_button = read_optional_value<int>(joystick, "dance_button", 2);
-    joy_mapping_.loco_button = read_optional_value<int>(joystick, "loco_button", 3);
+    joy_mapping_.mode_confirm_button = read_optional_value<int>(
+      joystick, "mode_confirm_button", 0);
+    joy_mapping_.fixed_modifier_button = read_optional_value<int>(
+      joystick, "fixed_modifier_button", 4);
+    joy_mapping_.passive_modifier_axis = read_optional_value<int>(
+      joystick, "passive_modifier_axis", 2);
+    joy_mapping_.loco_modifier_button = read_optional_value<int>(
+      joystick, "loco_modifier_button", 5);
+    joy_mapping_.dance_modifier_axis = read_optional_value<int>(
+      joystick, "dance_modifier_axis", 5);
+    joy_mapping_.passive_modifier_axis_sign = read_optional_value<float>(
+      joystick, "passive_modifier_axis_sign", 1.0F);
+    joy_mapping_.dance_modifier_axis_sign = read_optional_value<float>(
+      joystick, "dance_modifier_axis_sign", 1.0F);
+    joy_mapping_.trigger_activation_threshold = read_optional_value<float>(
+      joystick, "trigger_activation_threshold", 0.5F);
     joy_mapping_.linear_x_axis = read_optional_value<int>(joystick, "linear_x_axis", 1);
     joy_mapping_.linear_y_axis = read_optional_value<int>(joystick, "linear_y_axis", 0);
     joy_mapping_.yaw_axis = read_optional_value<int>(joystick, "yaw_axis", 3);
@@ -598,6 +651,33 @@ private:
       read_optional_value<float>(dance_mode, "kp", 50.0F),
       read_optional_value<float>(dance_mode, "kd", 1.0F)
     };
+    fixed_mode_transition_duration_sec_ = read_optional_value<float>(
+      fixed_mode, "transition_duration_sec", 1.0F);
+    fixed_mode_default_gains_ = fixed_default;
+    passive_mode_default_gains_ = passive_default;
+
+    gain_profiles_.clear();
+    const YAML::Node gain_profiles = controller["gain_profiles"];
+    if (gain_profiles && gain_profiles.IsMap()) {
+      for (const auto & item : gain_profiles) {
+        const auto profile_name = item.first.as<std::string>();
+        const auto profile_node = item.second;
+        GainProfile profile;
+        profile.fixed.kp = read_optional_value<float>(profile_node, "fixed_kp", fixed_default.kp);
+        profile.fixed.kd = read_optional_value<float>(profile_node, "fixed_kd", fixed_default.kd);
+        profile.passive.kp = read_optional_value<float>(
+          profile_node, "passive_kp", passive_default.kp);
+        profile.passive.kd = read_optional_value<float>(
+          profile_node, "passive_kd", passive_default.kd);
+        profile.loco.kp = read_optional_value<float>(profile_node, "loco_kp", loco_default.kp);
+        profile.loco.kd = read_optional_value<float>(profile_node, "loco_kd", loco_default.kd);
+        profile.dance.kp = read_optional_value<float>(
+          profile_node, "dance_kp", dance_default.kp);
+        profile.dance.kd = read_optional_value<float>(
+          profile_node, "dance_kd", dance_default.kd);
+        gain_profiles_[profile_name] = profile;
+      }
+    }
 
     const YAML::Node policy = controller["policy"];
     policy_config_.model_path = resolve_auxiliary_path(
@@ -662,10 +742,26 @@ private:
         const auto & motor_node = motor_it->second;
         const YAML::Node control_node = motor_node["control"] ? motor_node["control"] : motor_node;
 
+        if (control_node["gain_profile"]) {
+          config.gain_profile_name = control_node["gain_profile"].as<std::string>();
+          const auto profile_it = gain_profiles_.find(*config.gain_profile_name);
+          if (profile_it == gain_profiles_.end()) {
+            throw std::runtime_error(
+                    "Unknown gain_profile for joint " + name + ": " + *config.gain_profile_name);
+          }
+          config.fixed_gains = profile_it->second.fixed;
+          config.passive_gains = profile_it->second.passive;
+          config.loco_gains = profile_it->second.loco;
+          config.dance_gains = profile_it->second.dance;
+        }
+
         if (control_node["initial_position"]) {
           config.configured_initial_position = control_node["initial_position"].as<float>();
           config.initial_position = *config.configured_initial_position;
           config.initial_position_ready = true;
+        }
+        if (control_node["fixed_position"]) {
+          config.configured_fixed_position = control_node["fixed_position"].as<float>();
         }
         config.fixed_gains.kp = read_optional_value<float>(
           control_node, "fixed_kp", config.fixed_gains.kp);
@@ -775,14 +871,52 @@ private:
       policy_config_.model_path = resolve_auxiliary_path(model_override);
     }
 
+    const auto joy_topic_override = this->get_parameter("joy_topic").as_string();
+    if (!joy_topic_override.empty()) {
+      joy_topic_ = joy_topic_override;
+    }
+
+    const auto mode_command_topic_override = this->get_parameter("mode_command_topic").as_string();
+    if (!mode_command_topic_override.empty()) {
+      mode_command_topic_ = mode_command_topic_override;
+    }
+
     const auto control_hz_override = this->get_parameter("control_hz").as_double();
     if (control_hz_override > 0.0) {
       control_hz_ = control_hz_override;
     }
 
+    const auto command_timeout_override = this->get_parameter("command_timeout_ms").as_int();
+    if (command_timeout_override > 0) {
+      command_timeout_ms_ = command_timeout_override;
+    }
+
+    if (this->get_parameter("fixed_passive_test_only").as_bool()) {
+      fixed_passive_test_only_ = true;
+    }
+
+    sanitize_startup_mode_for_test_only();
+
     if (control_hz_ <= 0.0) {
       throw std::runtime_error("control_hz must be > 0");
     }
+  }
+
+  void sanitize_startup_mode_for_test_only()
+  {
+    if (!fixed_passive_test_only_) {
+      return;
+    }
+
+    if (startup_mode_ == RobotMode::kFixed || startup_mode_ == RobotMode::kPassive) {
+      return;
+    }
+
+    RCLCPP_WARN(
+      this->get_logger(),
+      "fixed_passive_test_only is enabled, overriding startup_mode=%s to passive",
+      mode_to_string(startup_mode_).c_str());
+    startup_mode_ = RobotMode::kPassive;
   }
 
   void create_policy_backend()
@@ -812,10 +946,6 @@ private:
 
   void joy_callback(const sensor_msgs::msg::Joy::SharedPtr message)
   {
-    if (previous_buttons_.size() < message->buttons.size()) {
-      previous_buttons_.resize(message->buttons.size(), 0);
-    }
-
     command_[0] = joy_mapping_.linear_x_sign * joy_mapping_.linear_x_scale *
       joy_axis_or_zero(*message, joy_mapping_.linear_x_axis);
     command_[1] = joy_mapping_.linear_y_sign * joy_mapping_.linear_y_scale *
@@ -823,12 +953,7 @@ private:
     command_[2] = joy_mapping_.yaw_sign * joy_mapping_.yaw_scale *
       joy_axis_or_zero(*message, joy_mapping_.yaw_axis);
 
-    handle_mode_button(*message, joy_mapping_.fixed_button, RobotMode::kFixed);
-    handle_mode_button(*message, joy_mapping_.passive_button, RobotMode::kPassive);
-    handle_mode_button(*message, joy_mapping_.dance_button, RobotMode::kDance);
-    handle_mode_button(*message, joy_mapping_.loco_button, RobotMode::kLoco);
-
-    previous_buttons_ = message->buttons;
+    handle_mode_combos(*message);
   }
 
   void imu_callback(const sensor_msgs::msg::Imu::SharedPtr message)
@@ -837,20 +962,75 @@ private:
     has_imu_ = true;
   }
 
-  void handle_mode_button(
-    const sensor_msgs::msg::Joy & message,
-    const int button_index,
-    const RobotMode requested_mode)
+  void mode_command_callback(const std_msgs::msg::String::SharedPtr message)
   {
-    const bool currently_pressed = joy_button_pressed(message, button_index);
-    const bool previously_pressed =
-      button_index >= 0 &&
-      static_cast<size_t>(button_index) < previous_buttons_.size() &&
-      previous_buttons_[static_cast<size_t>(button_index)] != 0;
-
-    if (currently_pressed && !previously_pressed) {
-      switch_mode(requested_mode);
+    const auto requested_mode = parse_mode(message->data);
+    if (!requested_mode.has_value()) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Ignoring unknown mode command: %s",
+        message->data.c_str());
+      return;
     }
+
+    (void)request_mode(*requested_mode, "mode_command_topic");
+  }
+
+  void handle_mode_combos(const sensor_msgs::msg::Joy & message)
+  {
+    const bool confirm_pressed = joy_button_pressed(message, joy_mapping_.mode_confirm_button);
+    const bool fixed_combo_active = confirm_pressed &&
+      joy_button_pressed(message, joy_mapping_.fixed_modifier_button);
+    const bool passive_combo_active = confirm_pressed &&
+      joy_axis_activated(
+        message,
+        joy_mapping_.passive_modifier_axis,
+        joy_mapping_.passive_modifier_axis_sign,
+        joy_mapping_.trigger_activation_threshold);
+    const bool loco_combo_active = confirm_pressed &&
+      joy_button_pressed(message, joy_mapping_.loco_modifier_button);
+    const bool dance_combo_active = confirm_pressed &&
+      joy_axis_activated(
+        message,
+        joy_mapping_.dance_modifier_axis,
+        joy_mapping_.dance_modifier_axis_sign,
+        joy_mapping_.trigger_activation_threshold);
+
+    if (fixed_combo_active && !previous_fixed_combo_active_) {
+      (void)request_mode(RobotMode::kFixed, "joystick_combo");
+    }
+    if (passive_combo_active && !previous_passive_combo_active_) {
+      (void)request_mode(RobotMode::kPassive, "joystick_combo");
+    }
+    if (loco_combo_active && !previous_loco_combo_active_) {
+      (void)request_mode(RobotMode::kLoco, "joystick_combo");
+    }
+    if (dance_combo_active && !previous_dance_combo_active_) {
+      (void)request_mode(RobotMode::kDance, "joystick_combo");
+    }
+
+    previous_fixed_combo_active_ = fixed_combo_active;
+    previous_passive_combo_active_ = passive_combo_active;
+    previous_loco_combo_active_ = loco_combo_active;
+    previous_dance_combo_active_ = dance_combo_active;
+  }
+
+  bool request_mode(const RobotMode requested_mode, const std::string & source)
+  {
+    if (fixed_passive_test_only_ &&
+      requested_mode != RobotMode::kFixed &&
+      requested_mode != RobotMode::kPassive)
+    {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "Ignoring %s request for mode %s because fixed_passive_test_only is enabled",
+        source.c_str(),
+        mode_to_string(requested_mode).c_str());
+      return false;
+    }
+
+    switch_mode(requested_mode);
+    return true;
   }
 
   void switch_mode(const RobotMode new_mode)
@@ -860,6 +1040,12 @@ private:
     }
 
     mode_ = new_mode;
+    if (mode_ == RobotMode::kFixed) {
+      start_fixed_mode_transition();
+    } else {
+      fixed_mode_transition_active_ = false;
+      fixed_mode_transition_start_positions_.clear();
+    }
     if (mode_ == RobotMode::kLoco) {
       std::fill(previous_action_.begin(), previous_action_.end(), 0.0F);
       std::fill(latest_action_.begin(), latest_action_.end(), 0.0F);
@@ -874,6 +1060,26 @@ private:
       mode_to_string(mode_).c_str());
   }
 
+  void start_fixed_mode_transition()
+  {
+    fixed_mode_transition_start_positions_.clear();
+    for (const auto & [name, state] : motor_state_cache_) {
+      if (state.valid) {
+        fixed_mode_transition_start_positions_[name] = state.position;
+      }
+    }
+
+    if (fixed_mode_transition_duration_sec_ <= 1.0e-4F ||
+      fixed_mode_transition_start_positions_.empty())
+    {
+      fixed_mode_transition_active_ = false;
+      return;
+    }
+
+    fixed_mode_transition_active_ = true;
+    fixed_mode_transition_start_time_ = std::chrono::steady_clock::now();
+  }
+
   void publish_mode()
   {
     std_msgs::msg::String message;
@@ -886,28 +1092,51 @@ private:
     (void)manager_->poll_once(std::chrono::milliseconds(rx_poll_timeout_ms_));
     const auto states = manager_->snapshot_states();
     update_motor_state_cache(states);
-    rebuild_logical_joint_state_cache(states);
-    maybe_capture_initial_positions();
+    maybe_capture_motor_initial_positions();
+
+    const bool use_parallel_solver = mode_ == RobotMode::kLoco || mode_ == RobotMode::kDance;
+    if (use_parallel_solver) {
+      rebuild_logical_joint_state_cache(states);
+      maybe_capture_initial_positions();
+    } else {
+      rebuild_simple_joint_state_cache(states);
+    }
+
     publish_joint_states();
     publish_raw_motor_states(states);
     publish_mode();
 
+    if (!use_parallel_solver) {
+      if (!have_all_motor_states()) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 3000,
+          "Waiting for feedback from all %zu raw motors before sending fixed/passive commands",
+          manager_->motor_names().size());
+        return;
+      }
+
+      auto commands = build_direct_motor_commands(mode_);
+      if (commands.empty()) {
+        return;
+      }
+
+      const auto results = manager_->command_group_mit(
+        commands,
+        std::chrono::milliseconds(command_timeout_ms_));
+      log_results("control_direct", results, false);
+      return;
+    }
+
     if (!have_all_joint_states()) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 3000,
-        "Waiting for feedback from all %zu joints before sending humanoid commands",
+        "Waiting for feedback from all %zu logical joints before sending loco/dance commands",
         joints_.size());
       return;
     }
 
     std::vector<LogicalJointCommand> logical_commands;
     switch (mode_) {
-      case RobotMode::kFixed:
-        logical_commands = build_fixed_commands();
-        break;
-      case RobotMode::kPassive:
-        logical_commands = build_passive_commands();
-        break;
       case RobotMode::kDance:
         logical_commands = build_dance_commands();
         break;
@@ -968,6 +1197,43 @@ private:
     }
   }
 
+  void rebuild_simple_joint_state_cache(const std::vector<MotorState> & states)
+  {
+    logical_joint_state_cache_.clear();
+    for (const auto & state : states) {
+      if (parallel_adapter_.is_parallel_motor(state.name)) {
+        continue;
+      }
+      logical_joint_state_cache_[state.name] = LogicalJointState {
+        state.name,
+        state.position,
+        state.velocity,
+        state.torque,
+        state.valid
+      };
+    }
+  }
+
+  void maybe_capture_motor_initial_positions()
+  {
+    bool captured_any = false;
+    for (const auto & [name, state] : motor_state_cache_) {
+      if (!state.valid || motor_initial_position_cache_.count(name) > 0U) {
+        continue;
+      }
+      motor_initial_position_cache_[name] = state.position;
+      captured_any = true;
+    }
+
+    if (captured_any && all_motor_initial_positions_ready() && !logged_motor_initial_positions_ready_) {
+      logged_motor_initial_positions_ready_ = true;
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Captured initial raw motor positions for all %zu motors",
+        manager_->motor_names().size());
+    }
+  }
+
   void maybe_capture_initial_positions()
   {
     bool captured_any = false;
@@ -1012,10 +1278,128 @@ private:
       });
   }
 
+  bool have_all_motor_states() const
+  {
+    const auto & motor_names = manager_->motor_names();
+    return std::all_of(
+      motor_names.begin(), motor_names.end(),
+      [this](const std::string & name) {
+        const auto it = motor_state_cache_.find(name);
+        return it != motor_state_cache_.end() && it->second.valid;
+      });
+  }
+
+  bool all_motor_initial_positions_ready() const
+  {
+    const auto & motor_names = manager_->motor_names();
+    return std::all_of(
+      motor_names.begin(), motor_names.end(),
+      [this](const std::string & name) {
+        return motor_initial_position_cache_.count(name) > 0U;
+      });
+  }
+
   const LogicalJointState * find_state(const std::string & name) const
   {
     const auto state_it = logical_joint_state_cache_.find(name);
     return state_it == logical_joint_state_cache_.end() ? nullptr : &state_it->second;
+  }
+
+  const JointControlConfig * find_joint_config(const std::string & name) const
+  {
+    const auto joint_it = joint_lookup_.find(name);
+    if (joint_it == joint_lookup_.end()) {
+      return nullptr;
+    }
+    return &joints_[joint_it->second];
+  }
+
+  std::vector<NamedMitCommand> build_direct_motor_commands(const RobotMode target_mode)
+  {
+    std::vector<NamedMitCommand> commands;
+    const auto & motor_names = manager_->motor_names();
+    commands.reserve(motor_names.size());
+
+    if (target_mode == RobotMode::kFixed && !all_motor_initial_positions_ready()) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "fixed mode is waiting for raw motor initial positions");
+      return {};
+    }
+
+    float fixed_transition_progress = 1.0F;
+    if (target_mode == RobotMode::kFixed && fixed_mode_transition_active_) {
+      const auto elapsed = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - fixed_mode_transition_start_time_).count();
+      fixed_transition_progress = clamp_value(
+        elapsed / std::max(fixed_mode_transition_duration_sec_, 1.0e-4F),
+        0.0F,
+        1.0F);
+    }
+
+    for (const auto & motor_name : motor_names) {
+      const auto state_it = motor_state_cache_.find(motor_name);
+      if (state_it == motor_state_cache_.end() || !state_it->second.valid) {
+        return {};
+      }
+
+      const auto motor_config = manager_->motor_config(motor_name);
+      if (!motor_config.has_value()) {
+        return {};
+      }
+
+      const bool is_parallel_motor = parallel_adapter_.is_parallel_motor(motor_name);
+      const auto * joint_config = find_joint_config(motor_name);
+      const ModeGains * gains = target_mode == RobotMode::kFixed ?
+        &fixed_mode_default_gains_ : &passive_mode_default_gains_;
+      float target_position = state_it->second.position;
+
+      if (joint_config != nullptr && !is_parallel_motor) {
+        gains = target_mode == RobotMode::kFixed ?
+          &joint_config->fixed_gains : &joint_config->passive_gains;
+        if (target_mode == RobotMode::kFixed) {
+          if (joint_config->configured_fixed_position.has_value()) {
+            target_position = *joint_config->configured_fixed_position;
+          } else if (joint_config->initial_position_ready) {
+            target_position = joint_config->initial_position;
+          }
+        }
+      } else if (target_mode == RobotMode::kFixed) {
+        const auto initial_it = motor_initial_position_cache_.find(motor_name);
+        if (initial_it == motor_initial_position_cache_.end()) {
+          return {};
+        }
+        target_position = initial_it->second;
+      }
+
+      if (target_mode == RobotMode::kFixed && fixed_mode_transition_active_) {
+        const auto start_it = fixed_mode_transition_start_positions_.find(motor_name);
+        const float start_position = start_it != fixed_mode_transition_start_positions_.end() ?
+          start_it->second : state_it->second.position;
+        target_position = start_position +
+          fixed_transition_progress * (target_position - start_position);
+      }
+
+      MitCommand command;
+      command.position = clamp_value(
+        target_position,
+        motor_config->limits.position_min,
+        motor_config->limits.position_max);
+      command.velocity = 0.0F;
+      command.kp = gains->kp;
+      command.kd = gains->kd;
+      command.torque = 0.0F;
+      commands.push_back(NamedMitCommand {motor_name, command});
+    }
+
+    if (target_mode == RobotMode::kFixed && fixed_mode_transition_active_ &&
+      fixed_transition_progress >= 0.999F)
+    {
+      fixed_mode_transition_active_ = false;
+      fixed_mode_transition_start_positions_.clear();
+    }
+
+    return commands;
   }
 
   std::vector<LogicalJointCommand> build_fixed_commands()
@@ -1169,7 +1553,7 @@ private:
       switch (target_mode) {
         case RobotMode::kFixed:
           gains = &joint.fixed_gains;
-          target_position = joint.initial_position;
+          target_position = joint.configured_fixed_position.value_or(joint.initial_position);
           break;
         case RobotMode::kPassive:
           gains = &joint.passive_gains;
@@ -1375,38 +1759,53 @@ private:
   std::vector<JointControlConfig> joints_;
   std::unordered_map<std::string, size_t> joint_lookup_;
   std::unordered_map<std::string, MotorState> motor_state_cache_;
+  std::unordered_map<std::string, float> motor_initial_position_cache_;
+  std::unordered_map<std::string, GainProfile> gain_profiles_;
   std::unordered_map<std::string, LogicalJointState> logical_joint_state_cache_;
   std::vector<ParallelMechanismConfig> parallel_mechanism_configs_;
   ParallelJointAdapter parallel_adapter_ {};
   sensor_msgs::msg::Imu latest_imu_;
   bool has_imu_ {false};
   bool logged_initial_positions_ready_ {false};
+  bool logged_motor_initial_positions_ready_ {false};
   bool warned_dance_placeholder_ {false};
   bool published_initial_mode_ {false};
+  bool fixed_mode_transition_active_ {false};
 
   std::string controller_config_path_;
   std::string motor_config_path_;
   std::string joy_topic_ {"joy"};
   std::string imu_topic_ {"imu/data"};
   std::string mode_topic_ {"humanoid_control/mode"};
+  std::string mode_command_topic_ {"humanoid_control/mode_command"};
   double control_hz_ {100.0};
   int command_timeout_ms_ {5};
   int rx_poll_timeout_ms_ {0};
   bool auto_enable_on_start_ {true};
   bool auto_disable_on_shutdown_ {true};
   bool publish_policy_debug_topics_ {true};
+  bool fixed_passive_test_only_ {false};
   RobotMode startup_mode_ {RobotMode::kPassive};
   RobotMode mode_ {RobotMode::kPassive};
+  float fixed_mode_transition_duration_sec_ {1.0F};
+  ModeGains fixed_mode_default_gains_ {};
+  ModeGains passive_mode_default_gains_ {};
   JoyMapping joy_mapping_ {};
   PolicyConfig policy_config_ {};
   std::array<float, 3> command_ {0.0F, 0.0F, 0.0F};
-  std::vector<int32_t> previous_buttons_;
   std::vector<float> previous_action_;
   std::vector<float> latest_action_;
+  std::unordered_map<std::string, float> fixed_mode_transition_start_positions_;
+  std::chrono::steady_clock::time_point fixed_mode_transition_start_time_ {};
+  bool previous_fixed_combo_active_ {false};
+  bool previous_passive_combo_active_ {false};
+  bool previous_loco_combo_active_ {false};
+  bool previous_dance_combo_active_ {false};
   std::unique_ptr<PolicyBackend> policy_backend_;
 
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_command_sub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr raw_joint_state_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr mode_pub_;

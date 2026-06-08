@@ -3,7 +3,7 @@
 ROS 2 joystick driver package for a USB gamepad detected as:
 
 - device name: `Microsoft X-Box 360 pad`
-- stable path: `/dev/input/by-id/usb-S_TGZ_Controller_3E529620-joystick`
+- stable path: `/dev/input/by-id/usb-S_TGZ_Controller_3E529690-joystick`
 
 ## Nodes
 
@@ -20,28 +20,35 @@ ros2 launch dm_joy dm_joy.launch.py
 
 ## Typical mapping
 
-This controller appears as an Xbox-compatible gamepad. The monitor node assumes:
+This controller appears as an Xbox-compatible gamepad. The monitor node uses the
+labels printed on your controller while keeping the detected Linux button and axis indices:
 
-- `button[0]`: `cross_or_A`
-- `button[1]`: `circle_or_B`
-- `button[2]`: `square_or_X`
-- `button[3]`: `triangle_or_Y`
-- `button[4]`: `L1_or_LB`
-- `button[5]`: `R1_or_RB`
-- `button[6]`: `select_or_back`
+- `button[0]`: `A`
+- `button[1]`: `B`
+- `button[2]`: `X`
+- `button[3]`: `Y`
+- `button[4]`: `L1`
+- `button[5]`: `R1`
+- `button[6]`: `select`
 - `button[7]`: `start`
-- `button[8]`: `ps_or_guide`
+- `button[8]`: `ps`
 - `button[9]`: `L3`
 - `button[10]`: `R3`
 
 - `axis[0]`: `left_stick_x`
-- `axis[1]`: `left_stick_y`
-- `axis[2]`: `L2_or_LT`
+- `axis[1]`: `left_stick_y_up_positive`
+- `axis[2]`: `L2_trigger`
 - `axis[3]`: `right_stick_x`
-- `axis[4]`: `right_stick_y`
-- `axis[5]`: `R2_or_RT`
+- `axis[4]`: `right_stick_y_up_positive`
+- `axis[5]`: `R2_trigger`
 - `axis[6]`: `dpad_x`
-- `axis[7]`: `dpad_y`
+- `axis[7]`: `dpad_y_up_positive`
+
+By default, the driver flips these three axes so the sign is more intuitive for robot control:
+
+- `axis[1]`: pushing the left stick up becomes positive
+- `axis[4]`: pushing the right stick up becomes positive
+- `axis[7]`: pressing D-pad up becomes positive
 
 ## Permission note
 

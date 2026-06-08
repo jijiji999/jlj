@@ -10,15 +10,15 @@ namespace
 std::vector<std::string> defaultButtonNames()
 {
   return {
-    "cross_or_A",
-    "circle_or_B",
-    "square_or_X",
-    "triangle_or_Y",
-    "L1_or_LB",
-    "R1_or_RB",
-    "select_or_back",
+    "A",
+    "B",
+    "X",
+    "Y",
+    "L1",
+    "R1",
+    "select",
     "start",
-    "ps_or_guide",
+    "ps",
     "L3",
     "R3"
   };
@@ -28,13 +28,13 @@ std::vector<std::string> defaultAxisNames()
 {
   return {
     "left_stick_x",
-    "left_stick_y",
-    "L2_or_LT",
+    "left_stick_y_up_positive",
+    "L2_trigger",
     "right_stick_x",
-    "right_stick_y",
-    "R2_or_RT",
+    "right_stick_y_up_positive",
+    "R2_trigger",
     "dpad_x",
-    "dpad_y"
+    "dpad_y_up_positive"
   };
 }
 }  // namespace
@@ -56,7 +56,8 @@ public:
       std::bind(&DmJoyMonitorNode::joyCallback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "dm_joy_monitor_node listening on %s", joy_topic_.c_str());
-    RCLCPP_INFO(this->get_logger(), "Default button map assumes Xbox-compatible layout:");
+    RCLCPP_INFO(this->get_logger(), "Monitor uses the labels printed on your controller.");
+    RCLCPP_INFO(this->get_logger(), "L2/R2 are reported as analog axes, not digital buttons.");
     printMapping();
   }
 

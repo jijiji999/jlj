@@ -127,6 +127,7 @@ private:
   const AnkleRig * find_rig(const std::string & side) const;
 
   std::unique_ptr<dm_motor::DmMotorManager> manager_;
+  AnkleRig waist_rig_ {};
   AnkleRig left_rig_ {};
   AnkleRig right_rig_ {};
   rclcpp::TimerBase::SharedPtr poll_timer_;

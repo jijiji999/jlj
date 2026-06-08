@@ -160,10 +160,12 @@ const sendPanel = async (panel) => {
 };
 
 const resetPanel = (panel) => {
+  const defaultKp = panel.dataset.defaultKp ?? "45.0";
+  const defaultKd = panel.dataset.defaultKd ?? "1.4";
   panel.querySelector(".pitch-slider").value = 0;
   panel.querySelector(".roll-slider").value = 0;
-  panel.querySelector(".kp-slider").value = 45.0;
-  panel.querySelector(".kd-slider").value = 1.4;
+  panel.querySelector(".kp-slider").value = defaultKp;
+  panel.querySelector(".kd-slider").value = defaultKd;
   panel.querySelector(".motor1-slider").value = 0;
   panel.querySelector(".motor2-slider").value = 0;
   syncPanelLabels(panel);

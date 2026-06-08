@@ -90,6 +90,8 @@ private:
     double lrod2 {0.0};
     double m01 {0.0};
     double m02 {0.0};
+    double motor_dir1 {1.0};
+    double motor_dir2 {1.0};
     ParallelAxisLimits pitch_limits {};
     ParallelAxisLimits roll_limits {};
   };
@@ -114,11 +116,6 @@ private:
     double roll,
     double motor_1,
     double motor_2,
-    Eigen::Matrix2d & jacobian,
-    int & error_state) const;
-  bool compute_numerical_inverse_jacobian(
-    double pitch,
-    double roll,
     Eigen::Matrix2d & jacobian,
     int & error_state) const;
   bool is_loaded() const;

@@ -3,19 +3,25 @@ controller:
   joy_topic: joy
   imu_topic: imu/data
   mode_topic: humanoid_control/mode
+  mode_command_topic: humanoid_control/mode_command
   control_hz: 100.0
   command_timeout_ms: 5
   rx_poll_timeout_ms: 0
   auto_enable_on_start: true
   auto_disable_on_shutdown: true
   publish_policy_debug_topics: true
+  fixed_passive_test_only: false
   startup_mode: passive
 
   joystick:
-    fixed_button: 0
-    passive_button: 1
-    dance_button: 2
-    loco_button: 3
+    mode_confirm_button: 0
+    fixed_modifier_button: 4
+    passive_modifier_axis: 2
+    loco_modifier_button: 5
+    dance_modifier_axis: 5
+    passive_modifier_axis_sign: 1.0
+    dance_modifier_axis_sign: 1.0
+    trigger_activation_threshold: 0.5
     linear_x_axis: 1
     linear_y_axis: 0
     yaw_axis: 3
@@ -29,6 +35,7 @@ controller:
   fixed_mode:
     kp: 80.0
     kd: 2.0
+    transition_duration_sec: 1.0
 
   passive_mode:
     kp: 0.0
@@ -44,6 +51,52 @@ controller:
   dance_mode:
     kp: 50.0
     kd: 1.0
+
+  gain_profiles:
+    torso_yaw:
+      fixed_kp: 45.0
+      fixed_kd: 2.5
+      passive_kp: 0.0
+      passive_kd: 0.2
+      loco_kp: 70.0
+      loco_kd: 1.6
+      dance_kp: 80.0
+      dance_kd: 2.0
+    shoulder:
+      fixed_kp: 45.0
+      fixed_kd: 1.5
+      passive_kp: 0.0
+      passive_kd: 0.2
+      loco_kp: 25.0
+      loco_kd: 0.8
+    wrist:
+      fixed_kp: 30.0
+      fixed_kd: 1.0
+      passive_kp: 0.0
+      passive_kd: 0.1
+      loco_kp: 15.0
+      loco_kd: 0.5
+    hip:
+      fixed_kp: 70.0
+      fixed_kd: 5.0
+      passive_kp: 0.0
+      passive_kd: 0.2
+      loco_kp: 75.0
+      loco_kd: 2.0
+    knee:
+      fixed_kp: 50.0
+      fixed_kd: 3.0
+      passive_kp: 0.0
+      passive_kd: 0.2
+      loco_kp: 85.0
+      loco_kd: 2.2
+    ankle:
+      fixed_kp: 40.0
+      fixed_kd: 2.0
+      passive_kp: 0.0
+      passive_kd: 0.2
+      loco_kp: 45.0
+      loco_kd: 1.4
 
   policy:
     model_path: policies/loco_policy.onnx
@@ -111,15 +164,8 @@ parallel_mechanisms:
 
 joints:
   - name: waist_yaw
+    gain_profile: torso_yaw
     initial_position: 0.0
-    fixed_kp: 90.0
-    fixed_kd: 2.5
-    passive_kp: 0.0
-    passive_kd: 0.2
-    loco_kp: 70.0
-    loco_kd: 1.6
-    dance_kp: 80.0
-    dance_kd: 2.0
     action_scale: 0.18
     action_offset: 0.0
   - name: waist_roll
@@ -129,11 +175,8 @@ joints:
     initial_position: 0.0
     action_scale: 0.15
   - name: left_shoulder_pitch
+    gain_profile: shoulder
     initial_position: 0.0
-    fixed_kp: 60.0
-    fixed_kd: 1.5
-    loco_kp: 25.0
-    loco_kd: 0.8
     action_scale: 0.10
   - name: left_shoulder_roll
     initial_position: 0.0
@@ -143,14 +186,11 @@ joints:
     action_scale: 0.10
   - name: left_elbow
     initial_position: 0.0
+    fixed_position: -1.0
     action_scale: 0.10
   - name: left_wrist_roll
+    gain_profile: wrist
     initial_position: 0.0
-    fixed_kp: 40.0
-    fixed_kd: 1.0
-    passive_kd: 0.1
-    loco_kp: 15.0
-    loco_kd: 0.5
     action_scale: 0.06
   - name: left_wrist_pitch
     initial_position: 0.0
@@ -159,11 +199,8 @@ joints:
     initial_position: 0.0
     action_scale: 0.06
   - name: right_shoulder_pitch
+    gain_profile: shoulder
     initial_position: 0.0
-    fixed_kp: 60.0
-    fixed_kd: 1.5
-    loco_kp: 25.0
-    loco_kd: 0.8
     action_scale: 0.10
   - name: right_shoulder_roll
     initial_position: 0.0
@@ -173,14 +210,11 @@ joints:
     action_scale: 0.10
   - name: right_elbow
     initial_position: 0.0
+    fixed_position: -1.0
     action_scale: 0.10
   - name: right_wrist_roll
+    gain_profile: wrist
     initial_position: 0.0
-    fixed_kp: 40.0
-    fixed_kd: 1.0
-    passive_kd: 0.1
-    loco_kp: 15.0
-    loco_kd: 0.5
     action_scale: 0.06
   - name: right_wrist_pitch
     initial_position: 0.0
@@ -189,11 +223,8 @@ joints:
     initial_position: 0.0
     action_scale: 0.06
   - name: left_hip_pitch
+    gain_profile: hip
     initial_position: 0.0
-    fixed_kp: 100.0
-    fixed_kd: 3.0
-    loco_kp: 75.0
-    loco_kd: 2.0
     action_scale: 0.32
   - name: left_hip_roll
     initial_position: 0.0
@@ -202,28 +233,19 @@ joints:
     initial_position: 0.0
     action_scale: 0.18
   - name: left_knee
+    gain_profile: knee
     initial_position: 0.0
-    fixed_kp: 110.0
-    fixed_kd: 3.0
-    loco_kp: 85.0
-    loco_kd: 2.2
     action_scale: 0.34
   - name: left_ankle_pitch
+    gain_profile: ankle
     initial_position: 0.0
-    fixed_kp: 70.0
-    fixed_kd: 2.0
-    loco_kp: 45.0
-    loco_kd: 1.4
     action_scale: 0.18
   - name: left_ankle_roll
     initial_position: 0.0
     action_scale: 0.12
   - name: right_hip_pitch
+    gain_profile: hip
     initial_position: 0.0
-    fixed_kp: 100.0
-    fixed_kd: 3.0
-    loco_kp: 75.0
-    loco_kd: 2.0
     action_scale: 0.32
   - name: right_hip_roll
     initial_position: 0.0
@@ -232,18 +254,12 @@ joints:
     initial_position: 0.0
     action_scale: 0.18
   - name: right_knee
+    gain_profile: knee
     initial_position: 0.0
-    fixed_kp: 110.0
-    fixed_kd: 3.0
-    loco_kp: 85.0
-    loco_kd: 2.2
     action_scale: 0.34
   - name: right_ankle_pitch
+    gain_profile: ankle
     initial_position: 0.0
-    fixed_kp: 70.0
-    fixed_kd: 2.0
-    loco_kp: 45.0
-    loco_kd: 1.4
     action_scale: 0.18
   - name: right_ankle_roll
     initial_position: 0.0

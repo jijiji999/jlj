@@ -35,7 +35,7 @@ motors:
     master_id: 0x11
     model: "8009P"
     notes: torso
-    default_kp: 27.0
+    default_kp: 50.0
     default_kd: 3.7
     max_output_torque: 54.0
     max_output_speed: 45.0
@@ -45,7 +45,7 @@ motors:
     master_id: 0x12
     model: "8009P"
     notes: torso
-    default_kp: 27.0
+    default_kp: 50.0
     default_kd: 3.7
     max_output_torque: 54.0
     max_output_speed: 45.0

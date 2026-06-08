@@ -36,6 +36,18 @@
 
 - [dm_humanoid_29.yaml](/home/sliouzhou04/jlj_ws/src/dm_humanoid/config/dm_humanoid_29.yaml)
 
+现在推荐这样修改 `fixed / passive` 的参数：
+
+- 改全局默认：`controller.fixed_mode`、`controller.passive_mode`
+- 改同类关节的一组参数：`controller.gain_profiles`
+- 改单个关节：`joints[].fixed_kp / fixed_kd / passive_kp / passive_kd`
+
+其中：
+
+- `gain_profiles` 是更便于维护的分组增益配置
+- `joints[].gain_profile` 用来把关节挂到某个分组
+- `fixed_mode.transition_duration_sec` 控制切到 `fixed` 时多快到达目标位姿
+
 底层电机配置：
 
 - [dm_motor_29.yaml](/home/sliouzhou04/jlj_ws/src/dm_motor/config/dm_motor_29.yaml)
@@ -63,7 +75,130 @@ ros2 run dm_humanoid dm_humanoid_control_node --ros-args \
   -p motor_config_path:=/home/sliouzhou04/jlj_ws/src/dm_motor/config/dm_motor_29.yaml
 ```
 
-## 6. 双踝并联关节可视化测试
+## 6. fixed / passive 切换测试
+
+如果你现在只想验证状态机的 `fixed` 和 `passive` 切换，可以直接启动一个限制模式测试：
+
+```bash
+ros2 launch dm_humanoid fixed_passive_test.launch.py
+```
+
+这个 launch 现在默认会同时启动：
+
+- `dm_joy_node`
+- `dm_joy_monitor_node`
+- `dm_humanoid_control_node`
+
+并默认做两件事：
+
+- 启动模式为 `passive`
+- 只允许 `fixed` 和 `passive`
+
+也就是说：
+
+- 即使没有 IMU，也可以先做这个测试
+- `loco` 和 `dance` 的请求会被忽略
+- 手柄链路也会一并启动，不需要再单独开一个 `dm_joy` 终端
+
+如果你只想起 `dm_humanoid`，不想让这个 launch 自动起手柄节点：
+
+```bash
+ros2 launch dm_humanoid fixed_passive_test.launch.py start_joy:=false
+```
+
+如果你想关闭手柄监视器输出：
+
+```bash
+ros2 launch dm_humanoid fixed_passive_test.launch.py use_joy_monitor:=false
+```
+
+如果你要显式覆盖手柄路径：
+
+```bash
+ros2 launch dm_humanoid fixed_passive_test.launch.py \
+  joy_device_path:=/dev/input/by-id/usb-S_TGZ_Controller_3E529690-joystick
+```
+
+### 6.1 用手柄切换
+
+当前已经改成组合键确认模式：
+
+- `A + L1` -> `fixed`
+- `A + L2` -> `passive`
+- `A + R1` -> `loco`
+- `A + R2` -> `dance`
+
+其中：
+
+- `A` 是确认键
+- `L2 / R2` 来自手柄扳机轴，不是普通按钮
+- 当前 `dance` 仍然只是预留模式入口
+
+对应配置在：
+
+- [dm_humanoid_29.yaml](/home/sliouzhou04/jlj_ws/src/dm_humanoid/config/dm_humanoid_29.yaml:15)
+
+如果后面发现 `L2 / R2` 触发方向和当前手柄不一致，可以调整：
+
+- `passive_modifier_axis_sign`
+- `dance_modifier_axis_sign`
+- `trigger_activation_threshold`
+
+### 6.2 用命令行切换
+
+如果你想不依赖手柄，直接从终端切换：
+
+切到 `fixed`：
+
+```bash
+ros2 topic pub --once /humanoid_control/mode_command std_msgs/msg/String "{data: fixed}"
+```
+
+切到 `passive`：
+
+```bash
+ros2 topic pub --once /humanoid_control/mode_command std_msgs/msg/String "{data: passive}"
+```
+
+### 6.3 怎么判断是否切换成功
+
+可以从三个地方看：
+
+1. 节点日志会打印：
+   `Switched humanoid mode to fixed`
+   或
+   `Switched humanoid mode to passive`
+2. 话题：
+
+```bash
+ros2 topic echo /humanoid_control/mode
+```
+
+3. 实机表现：
+
+- `fixed`
+  关节会回到设定初始位姿，并明显变硬
+  切换到 `fixed` 时会按 `fixed_mode.transition_duration_sec` 设定的时间平滑靠近目标
+
+- `passive`
+  关节保持很软，可以手动掰动
+
+补充：
+
+- 在 `fixed / passive` 模式下，三个并联关节不会走并联解算
+- 在 `loco / dance` 模式下，才会重新启用并联关节的逻辑关节解算与命令映射
+
+### 6.4 常用启动参数
+
+如果你要显式指定底层电机配置并从 `fixed` 启动：
+
+```bash
+ros2 launch dm_humanoid fixed_passive_test.launch.py \
+  motor_config_path:=/home/sliouzhou04/jlj_ws/src/dm_motor/config/dm_motor_29.yaml \
+  startup_mode:=fixed
+```
+
+## 7. 双踝并联关节可视化测试
 
 用于实机验证左右腿踝关节并联机构解算。页面中左右各有一组控制卡片：
 
