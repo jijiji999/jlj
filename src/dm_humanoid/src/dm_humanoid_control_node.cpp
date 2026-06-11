@@ -163,6 +163,8 @@ struct PolicyConfig
   size_t expected_observation_dim {0U};
   size_t expected_action_dim {0U};
   float action_clip {1.0F};
+  float builtin_action_amplitude {0.05F};
+  float builtin_action_frequency_hz {0.5F};
   ObservationScales observation_scales {};
 };
 
@@ -295,6 +297,86 @@ public:
 private:
   size_t action_dimension_ {0U};
   std::string reason_;
+};
+
+class BuiltinPolicyBackend final : public PolicyBackend
+{
+public:
+  explicit BuiltinPolicyBackend(const PolicyConfig & config)
+  : config_(config),
+    kind_(parse_kind(config.model_path)),
+    start_time_(std::chrono::steady_clock::now())
+  {
+  }
+
+  bool run(
+    const std::vector<float> &,
+    std::vector<float> & action,
+    std::string & error_message) override
+  {
+    action.assign(config_.expected_action_dim, 0.0F);
+
+    switch (kind_) {
+      case Kind::kZero:
+        error_message.clear();
+        return true;
+      case Kind::kSine:
+      {
+        const float elapsed_sec = std::chrono::duration<float>(
+          std::chrono::steady_clock::now() - start_time_).count();
+        const float phase =
+          2.0F * static_cast<float>(M_PI) * config_.builtin_action_frequency_hz * elapsed_sec;
+        const float value = config_.builtin_action_amplitude * std::sin(phase);
+        std::fill(action.begin(), action.end(), value);
+        error_message.clear();
+        return true;
+      }
+      default:
+        error_message = "Unknown builtin policy kind";
+        return false;
+    }
+  }
+
+  std::string description() const override
+  {
+    switch (kind_) {
+      case Kind::kZero:
+        return "builtin://zero";
+      case Kind::kSine:
+        return "builtin://sine";
+      default:
+        return "builtin://unknown";
+    }
+  }
+
+  bool is_fallback() const override
+  {
+    return false;
+  }
+
+private:
+  enum class Kind
+  {
+    kZero,
+    kSine,
+    kUnknown,
+  };
+
+  static Kind parse_kind(const std::string & model_path)
+  {
+    const auto lowered = to_lower_copy(model_path);
+    if (lowered == "builtin://zero") {
+      return Kind::kZero;
+    }
+    if (lowered == "builtin://sine") {
+      return Kind::kSine;
+    }
+    return Kind::kUnknown;
+  }
+
+  PolicyConfig config_;
+  Kind kind_ {Kind::kUnknown};
+  std::chrono::steady_clock::time_point start_time_ {};
 };
 
 #if DM_MOTOR_HAS_ONNXRUNTIME
@@ -687,6 +769,10 @@ private:
     policy_config_.input_name = read_optional_value<std::string>(policy, "input_name", std::string());
     policy_config_.output_name = read_optional_value<std::string>(policy, "output_name", std::string());
     policy_config_.action_clip = read_optional_value<float>(loco_mode, "action_clip", 1.0F);
+    policy_config_.builtin_action_amplitude = read_optional_value<float>(
+      policy, "builtin_action_amplitude", 0.05F);
+    policy_config_.builtin_action_frequency_hz = read_optional_value<float>(
+      policy, "builtin_action_frequency_hz", 0.5F);
     policy_config_.observation_scales.angular_velocity = read_optional_value<float>(
       policy, "angular_velocity_scale", 1.0F);
     policy_config_.observation_scales.gravity = read_optional_value<float>(
@@ -935,6 +1021,11 @@ private:
       policy_backend_ = std::make_unique<ZeroPolicyBackend>(
         policy_config_.expected_action_dim,
         "policy.model_path is empty, loco mode will output zero action");
+      return;
+    }
+
+    if (policy_config_.model_path.rfind("builtin://", 0) == 0) {
+      policy_backend_ = std::make_unique<BuiltinPolicyBackend>(policy_config_);
       return;
     }
 

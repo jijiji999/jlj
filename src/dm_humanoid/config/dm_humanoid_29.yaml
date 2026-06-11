@@ -100,11 +100,13 @@ controller:
       loco_kd: 1.4
 
   policy:
-    model_path: policies/loco_policy.onnx
+    model_path: builtin://zero
     input_name: ""
     output_name: ""
     expected_observation_dim: 96
     expected_action_dim: 29
+    builtin_action_amplitude: 0.05
+    builtin_action_frequency_hz: 0.5
     angular_velocity_scale: 1.0
     gravity_scale: 1.0
     command_scale: 1.0

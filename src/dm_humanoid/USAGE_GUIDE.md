@@ -256,6 +256,28 @@ ros2 launch dm_humanoid fixed_passive_test.launch.py \
 
 如果本机已经安装 `onnxruntime`，`dm_humanoid` 会在编译时自动接入真实后端；否则会继续用当前的 fallback backend。
 
+如果你还没有真实训练模型，建议先用占位策略验证框架：
+
+- `builtin://zero`
+  所有 action 恒为 0，最适合先验证状态机、观测、推理调度和整体稳定性
+
+- `builtin://sine`
+  所有 action 按统一正弦小幅变化，适合验证 loco 模式下动作更新链路
+
+当前默认已经设置为：
+
+```yaml
+policy:
+  model_path: builtin://zero
+```
+
+等真实模型到位后，只需要把它替换成真实 `.onnx` 路径，例如：
+
+```yaml
+policy:
+  model_path: /home/sliouzhou04/jlj_ws/models/loco_policy.onnx
+```
+
 如果你有本地 ONNX Runtime 安装目录，可以这样编译：
 
 ```bash
