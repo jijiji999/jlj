@@ -54,6 +54,38 @@
 
 ## 5. 启动方式
 
+正式 bringup 推荐使用：
+
+```bash
+ros2 launch dm_humanoid dm_humanoid_bringup.launch.py
+```
+
+这条 bringup 目前会统一启动：
+
+- `dm_joy_node`
+- `dm_imu_node`
+- `dm_humanoid_control_node`
+- `dm_humanoid_system_check_node`
+
+启动后系统自检节点会检查：
+
+- `/joy`
+- `/imu/data`
+- `/raw_motor_states`
+- `/joint_states`
+- `/humanoid_control/mode`
+
+当前说明：
+
+- CAN bridge 仍建议提前通过 `start_can_bridge.sh` 外部启动
+- 这是因为它涉及 `sudo modprobe vcan`、`ip link` 和 `cannelloni` 进程管理，更适合交给 systemd 或独立脚本
+
+如果你暂时不接 IMU，也可以：
+
+```bash
+ros2 launch dm_humanoid dm_humanoid_bringup.launch.py use_imu:=false require_imu:=false
+```
+
 先启动：
 
 - `dm_joy_node`
@@ -198,7 +230,40 @@ ros2 launch dm_humanoid fixed_passive_test.launch.py \
   startup_mode:=fixed
 ```
 
-## 7. 双踝并联关节可视化测试
+## 7. Loco 模式与 ONNX
+
+`loco` 模式现在支持独立的推理频率参数：
+
+- `controller.policy_hz`
+
+默认值：
+
+- `50.0`
+
+控制循环频率：
+
+- `controller.control_hz`
+
+默认值：
+
+- `200.0`
+
+当前行为是：
+
+- 控制循环按 `control_hz` 执行
+- ONNX 推理只按 `policy_hz` 更新一次动作
+- 两次推理之间，控制器会重复下发最近一次动作
+
+如果本机已经安装 `onnxruntime`，`dm_humanoid` 会在编译时自动接入真实后端；否则会继续用当前的 fallback backend。
+
+如果你有本地 ONNX Runtime 安装目录，可以这样编译：
+
+```bash
+colcon build --packages-select dm_humanoid \
+  --cmake-args -DONNXRUNTIME_ROOT_DIR=/path/to/onnxruntime
+```
+
+## 8. 双踝并联关节可视化测试
 
 用于实机验证左右腿踝关节并联机构解算。页面中左右各有一组控制卡片：
 

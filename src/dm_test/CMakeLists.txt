@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
+find_package(dm_humanoid REQUIRED)
 find_package(dm_motor REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -28,6 +29,7 @@ target_include_directories(dm_trajectory_test_node
 
 ament_target_dependencies(dm_trajectory_test_node
   ament_index_cpp
+  dm_humanoid
   dm_motor
   rclcpp
   sensor_msgs
@@ -35,6 +37,7 @@ ament_target_dependencies(dm_trajectory_test_node
 )
 
 target_link_libraries(dm_trajectory_test_node
+  dm_humanoid::dm_humanoid_parallel
   dm_motor::dm_motor_core
   yaml-cpp
 )
@@ -53,6 +56,7 @@ install(FILES README.md
 )
 
 install(PROGRAMS
+  scripts/convert_whole_body_csv.py
   scripts/evaluate_tracking.py
   scripts/realtime_plot_tracking.py
   DESTINATION lib/${PROJECT_NAME}

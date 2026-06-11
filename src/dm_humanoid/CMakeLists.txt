@@ -47,8 +47,13 @@ add_executable(ankle_parallel_web_node
   src/ankle_parallel_web_main.cpp
 )
 
+add_executable(dm_humanoid_system_check_node
+  src/dm_humanoid_system_check_node.cpp
+)
+
 target_compile_features(dm_humanoid_control_node PUBLIC cxx_std_17)
 target_compile_features(ankle_parallel_web_node PUBLIC cxx_std_17)
+target_compile_features(dm_humanoid_system_check_node PUBLIC cxx_std_17)
 
 target_include_directories(dm_humanoid_control_node
   PUBLIC
@@ -57,6 +62,12 @@ target_include_directories(dm_humanoid_control_node
 )
 
 target_include_directories(ankle_parallel_web_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_include_directories(dm_humanoid_system_check_node
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -77,11 +88,50 @@ ament_target_dependencies(ankle_parallel_web_node
   rclcpp
 )
 
+ament_target_dependencies(dm_humanoid_system_check_node
+  rclcpp
+  sensor_msgs
+  std_msgs
+)
+
+set(ONNXRUNTIME_WORKSPACE_HINT "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/onnxruntime")
+set(ONNXRUNTIME_ROOT_DIR "" CACHE PATH "Optional ONNX Runtime installation root")
+find_path(ONNXRUNTIME_INCLUDE_DIR
+  NAMES onnxruntime_cxx_api.h
+  HINTS
+    ${ONNXRUNTIME_WORKSPACE_HINT}
+    ${ONNXRUNTIME_ROOT_DIR}
+    $ENV{ONNXRUNTIME_ROOT_DIR}
+  PATH_SUFFIXES include include/onnxruntime include/onnxruntime/core/session
+)
+find_library(ONNXRUNTIME_LIBRARY
+  NAMES onnxruntime
+  HINTS
+    ${ONNXRUNTIME_WORKSPACE_HINT}
+    ${ONNXRUNTIME_ROOT_DIR}
+    $ENV{ONNXRUNTIME_ROOT_DIR}
+  PATH_SUFFIXES lib lib64
+)
+
 target_link_libraries(dm_humanoid_control_node
   dm_humanoid_parallel
   dm_motor::dm_motor_core
   yaml-cpp
 )
+
+if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+  message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_LIBRARY}")
+  get_filename_component(ONNXRUNTIME_LIBRARY_DIR ${ONNXRUNTIME_LIBRARY} DIRECTORY)
+  target_compile_definitions(dm_humanoid_control_node PRIVATE DM_MOTOR_HAS_ONNXRUNTIME=1)
+  target_include_directories(dm_humanoid_control_node PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+  target_link_libraries(dm_humanoid_control_node ${ONNXRUNTIME_LIBRARY})
+  set_target_properties(dm_humanoid_control_node PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+    INSTALL_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+  )
+else()
+  message(STATUS "ONNX Runtime not found, loco mode will use fallback backend")
+endif()
 
 target_link_libraries(ankle_parallel_web_node
   dm_humanoid_parallel
@@ -89,11 +139,18 @@ target_link_libraries(ankle_parallel_web_node
   yaml-cpp
 )
 
+ament_export_targets(export_dm_humanoid_parallel HAS_LIBRARY_TARGET)
+ament_export_dependencies(dm_motor Eigen3 yaml-cpp)
+
 install(
-  TARGETS dm_humanoid_control_node ankle_parallel_web_node dm_humanoid_parallel
+  TARGETS dm_humanoid_parallel
   EXPORT export_dm_humanoid_parallel
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
+)
+
+install(
+  TARGETS dm_humanoid_control_node ankle_parallel_web_node dm_humanoid_system_check_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

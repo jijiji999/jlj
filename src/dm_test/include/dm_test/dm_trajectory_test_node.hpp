@@ -10,7 +10,9 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "yaml-cpp/yaml.h"
 
+#include "dm_humanoid/parallel_joint_adapter.hpp"
 #include "dm_motor/dm_motor_manager.hpp"
 
 namespace dm_test
@@ -77,9 +79,12 @@ private:
 
   std::string resolve_test_config_path(const std::string & configured_path) const;
   std::string resolve_path_relative_to_test_config(const std::string & path) const;
+  std::string resolve_path_relative_to_humanoid_config(const std::string & path) const;
   void load_test_config();
+  void load_parallel_mechanisms(const YAML::Node & root);
   void load_csv_trajectory(const std::string & csv_path);
   void validate_active_group_against_motor_config();
+  std::vector<std::string> resolve_motor_names_for_group() const;
   void start_test_session();
   void stop_test_session();
 
@@ -98,6 +103,7 @@ private:
     const std::vector<double> & target_velocities);
   void log_command_results(const std::vector<dm_motor::MotorCommandResult> & results);
   JointGain gain_for_joint(const std::string & joint_name) const;
+  std::string motor_name_for_state(const std::string & joint_name) const;
   std::vector<std::string> split_csv_line(const std::string & line) const;
   std::optional<size_t> find_time_column_index(const std::vector<std::string> & headers) const;
   std::vector<size_t> resolve_csv_joint_column_indices(
@@ -107,6 +113,7 @@ private:
 
   std::string test_config_path_;
   std::string motor_config_path_;
+  std::string humanoid_config_path_;
   std::string trajectory_name_;
   std::string trajectory_csv_path_;
   std::string time_column_name_;
@@ -115,9 +122,13 @@ private:
   TrajectoryConfig active_trajectory_;
   std::unordered_map<std::string, dm_motor::MotorConfig> motor_configs_by_name_;
   std::unordered_map<std::string, dm_motor::MotorState> latest_states_by_name_;
+  std::unordered_map<std::string, dm_motor::MotorState> raw_states_by_name_;
   std::unordered_map<std::string, double> initial_positions_by_name_;
+  std::vector<std::string> active_motor_names_;
+  std::vector<dm_humanoid::ParallelMechanismSpec> parallel_mechanism_specs_;
 
   std::unique_ptr<dm_motor::DmMotorManager> manager_;
+  dm_humanoid::ParallelJointAdapter parallel_adapter_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr reference_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr actual_pub_;

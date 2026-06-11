@@ -404,6 +404,7 @@ public:
     this->declare_parameter<std::string>("policy_model_path", "");
     this->declare_parameter<std::string>("mode_command_topic", "");
     this->declare_parameter<double>("control_hz", 0.0);
+    this->declare_parameter<double>("policy_hz", 0.0);
     this->declare_parameter<int>("command_timeout_ms", 0);
     this->declare_parameter<bool>("fixed_passive_test_only", false);
 
@@ -589,6 +590,7 @@ private:
     mode_command_topic_ = read_optional_value<std::string>(
       controller, "mode_command_topic", "humanoid_control/mode_command");
     control_hz_ = read_optional_value<double>(controller, "control_hz", 100.0);
+    policy_hz_ = read_optional_value<double>(controller, "policy_hz", 50.0);
     command_timeout_ms_ = read_optional_value<int>(controller, "command_timeout_ms", 5);
     rx_poll_timeout_ms_ = read_optional_value<int>(controller, "rx_poll_timeout_ms", 0);
     auto_enable_on_start_ = read_optional_value<bool>(controller, "auto_enable_on_start", true);
@@ -886,6 +888,11 @@ private:
       control_hz_ = control_hz_override;
     }
 
+    const auto policy_hz_override = this->get_parameter("policy_hz").as_double();
+    if (policy_hz_override > 0.0) {
+      policy_hz_ = policy_hz_override;
+    }
+
     const auto command_timeout_override = this->get_parameter("command_timeout_ms").as_int();
     if (command_timeout_override > 0) {
       command_timeout_ms_ = command_timeout_override;
@@ -899,6 +906,9 @@ private:
 
     if (control_hz_ <= 0.0) {
       throw std::runtime_error("control_hz must be > 0");
+    }
+    if (policy_hz_ <= 0.0) {
+      throw std::runtime_error("policy_hz must be > 0");
     }
   }
 
@@ -1049,6 +1059,8 @@ private:
     if (mode_ == RobotMode::kLoco) {
       std::fill(previous_action_.begin(), previous_action_.end(), 0.0F);
       std::fill(latest_action_.begin(), latest_action_.end(), 0.0F);
+      latest_action_valid_ = false;
+      last_policy_run_time_ = std::chrono::steady_clock::time_point {};
     }
 
     publish_mode();
@@ -1452,43 +1464,52 @@ private:
       return build_passive_commands();
     }
 
-    std::vector<float> observation;
-    observation.reserve(policy_config_.expected_observation_dim);
-    if (!build_policy_observation(observation)) {
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 3000,
-        "Unable to build loco observation, falling back to passive behavior");
-      return build_passive_commands();
-    }
+    const auto now = std::chrono::steady_clock::now();
+    const bool should_run_policy =
+      !latest_action_valid_ ||
+      std::chrono::duration<double>(now - last_policy_run_time_).count() >= (1.0 / policy_hz_);
 
-    std::vector<float> action;
-    std::string run_message;
-    if (!policy_backend_->run(observation, action, run_message)) {
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 3000,
-        "Policy inference failed: %s",
-        run_message.c_str());
-      return build_fixed_commands();
-    }
+    if (should_run_policy) {
+      std::vector<float> observation;
+      observation.reserve(policy_config_.expected_observation_dim);
+      if (!build_policy_observation(observation)) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 3000,
+          "Unable to build loco observation, falling back to passive behavior");
+        return build_passive_commands();
+      }
 
-    if (policy_backend_->is_fallback()) {
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 5000,
-        "loco mode is using fallback policy backend: %s",
-        run_message.c_str());
-    }
+      std::vector<float> action;
+      std::string run_message;
+      if (!policy_backend_->run(observation, action, run_message)) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 3000,
+          "Policy inference failed: %s",
+          run_message.c_str());
+        return build_fixed_commands();
+      }
 
-    if (action.size() != joints_.size()) {
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 3000,
-        "Policy output dimension mismatch, expected %zu but got %zu",
-        joints_.size(),
-        action.size());
-      return build_fixed_commands();
-    }
+      if (policy_backend_->is_fallback()) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 5000,
+          "loco mode is using fallback policy backend: %s",
+          run_message.c_str());
+      }
 
-    latest_action_ = action;
-    publish_policy_debug(observation, latest_action_);
+      if (action.size() != joints_.size()) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 3000,
+          "Policy output dimension mismatch, expected %zu but got %zu",
+          joints_.size(),
+          action.size());
+        return build_fixed_commands();
+      }
+
+      latest_action_ = action;
+      latest_action_valid_ = true;
+      last_policy_run_time_ = now;
+      publish_policy_debug(observation, latest_action_);
+    }
 
     std::vector<LogicalJointCommand> commands;
     commands.reserve(joints_.size());
@@ -1779,6 +1800,7 @@ private:
   std::string mode_topic_ {"humanoid_control/mode"};
   std::string mode_command_topic_ {"humanoid_control/mode_command"};
   double control_hz_ {100.0};
+  double policy_hz_ {50.0};
   int command_timeout_ms_ {5};
   int rx_poll_timeout_ms_ {0};
   bool auto_enable_on_start_ {true};
@@ -1795,8 +1817,10 @@ private:
   std::array<float, 3> command_ {0.0F, 0.0F, 0.0F};
   std::vector<float> previous_action_;
   std::vector<float> latest_action_;
+  bool latest_action_valid_ {false};
   std::unordered_map<std::string, float> fixed_mode_transition_start_positions_;
   std::chrono::steady_clock::time_point fixed_mode_transition_start_time_ {};
+  std::chrono::steady_clock::time_point last_policy_run_time_ {};
   bool previous_fixed_combo_active_ {false};
   bool previous_passive_combo_active_ {false};
   bool previous_loco_combo_active_ {false};

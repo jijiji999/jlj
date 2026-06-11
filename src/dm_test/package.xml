@@ -10,6 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>ament_index_cpp</depend>
+  <depend>dm_humanoid</depend>
   <depend>dm_motor</depend>
   <depend>rclpy</depend>
   <depend>rclcpp</depend>

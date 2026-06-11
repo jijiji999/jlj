@@ -131,16 +131,16 @@ groups:
   waist:
     joints:
       - waist_yaw
-      - waist_parallel_1
-      - waist_parallel_2
+      - waist_roll
+      - waist_pitch
     default_kp: 35.0
     default_kd: 1.2
 
   whole_body:
     joints:
       - waist_yaw
-      - waist_parallel_1
-      - waist_parallel_2
+      - waist_roll
+      - waist_pitch
       - left_shoulder_pitch
       - left_shoulder_roll
       - left_shoulder_yaw
@@ -159,16 +159,76 @@ groups:
       - left_hip_roll
       - left_hip_yaw
       - left_knee
-      - left_ankle_parallel_1
-      - left_ankle_parallel_2
+      - left_ankle_pitch
+      - left_ankle_roll
       - right_hip_pitch
       - right_hip_roll
       - right_hip_yaw
       - right_knee
-      - right_ankle_parallel_1
-      - right_ankle_parallel_2
+      - right_ankle_pitch
+      - right_ankle_roll
     default_kp: 25.0
     default_kd: 1.0
+    joint_gains:
+      waist_yaw: {kp: 27.0, kd: 3.7}
+      waist_roll: {kp: 50.0, kd: 3.7}
+      waist_pitch: {kp: 50.0, kd: 3.7}
+      left_shoulder_pitch: {kp: 35.0, kd: 3.7}
+      left_shoulder_roll: {kp: 27.0, kd: 3.7}
+      left_shoulder_yaw: {kp: 10.0, kd: 1.0}
+      left_elbow: {kp: 20.0, kd: 2.0}
+      left_wrist_roll: {kp: 10.0, kd: 1.0}
+      left_wrist_pitch: {kp: 10.0, kd: 1.0}
+      left_wrist_yaw: {kp: 10.0, kd: 1.0}
+      right_shoulder_pitch: {kp: 35.0, kd: 3.7}
+      right_shoulder_roll: {kp: 27.0, kd: 3.7}
+      right_shoulder_yaw: {kp: 10.0, kd: 1.0}
+      right_elbow: {kp: 20.0, kd: 2.0}
+      right_wrist_roll: {kp: 10.0, kd: 1.0}
+      right_wrist_pitch: {kp: 10.0, kd: 1.0}
+      right_wrist_yaw: {kp: 10.0, kd: 1.0}
+      left_hip_pitch: {kp: 45.0, kd: 5.0}
+      left_hip_roll: {kp: 35.0, kd: 3.7}
+      left_hip_yaw: {kp: 27.0, kd: 3.7}
+      left_knee: {kp: 35.0, kd: 3.7}
+      left_ankle_pitch: {kp: 10.0, kd: 1.0}
+      left_ankle_roll: {kp: 10.0, kd: 1.0}
+      right_hip_pitch: {kp: 45.0, kd: 5.0}
+      right_hip_roll: {kp: 35.0, kd: 3.7}
+      right_hip_yaw: {kp: 27.0, kd: 3.7}
+      right_knee: {kp: 35.0, kd: 3.7}
+      right_ankle_pitch: {kp: 10.0, kd: 1.0}
+      right_ankle_roll: {kp: 10.0, kd: 1.0}
+    csv_columns:
+      waist_yaw: waist_yaw
+      waist_roll: waist_roll
+      waist_pitch: waist_pitch
+      left_shoulder_pitch: left_shoulder_pitch
+      left_shoulder_roll: left_shoulder_roll
+      left_shoulder_yaw: left_shoulder_yaw
+      left_elbow: left_elbow
+      left_wrist_roll: left_wrist_roll
+      left_wrist_pitch: left_wrist_pitch
+      left_wrist_yaw: left_wrist_yaw
+      right_shoulder_pitch: right_shoulder_pitch
+      right_shoulder_roll: right_shoulder_roll
+      right_shoulder_yaw: right_shoulder_yaw
+      right_elbow: right_elbow
+      right_wrist_roll: right_wrist_roll
+      right_wrist_pitch: right_wrist_pitch
+      right_wrist_yaw: right_wrist_yaw
+      left_hip_pitch: left_hip_pitch
+      left_hip_roll: left_hip_roll
+      left_hip_yaw: left_hip_yaw
+      left_knee: left_knee
+      left_ankle_pitch: left_ankle_pitch
+      left_ankle_roll: left_ankle_roll
+      right_hip_pitch: right_hip_pitch
+      right_hip_roll: right_hip_roll
+      right_hip_yaw: right_hip_yaw
+      right_knee: right_knee
+      right_ankle_pitch: right_ankle_pitch
+      right_ankle_roll: right_ankle_roll
 
 trajectories:
   left_arm_small_range:
@@ -243,6 +303,15 @@ trajectories:
       Absolute dual-arm alternating swing trajectory. The two arms move with opposite
       phase to mimic walking-style arm alternation.
     csv_path: both_arms_alternating_swing.csv
+
+  whole_body_zoulu:
+    group: whole_body
+    loop: true
+    description: >
+      Absolute whole-body walking trajectory converted from zoulu.csv. The source file
+      contains root pose plus 29 joint angles at 30 FPS; this test tracks the 29 joint
+      angles only.
+    csv_path: whole_body_zoulu.csv
 
   right_arm_small_range:
     group: right_arm

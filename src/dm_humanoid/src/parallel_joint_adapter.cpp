@@ -231,6 +231,9 @@ bool ParallelJointAdapter::translate_joint_commands(
   for (const auto & group : groups_) {
     const auto pitch_it = logical_lookup.find(group.spec.pitch_joint_name);
     const auto roll_it = logical_lookup.find(group.spec.roll_joint_name);
+    if (pitch_it == logical_lookup.end() && roll_it == logical_lookup.end()) {
+      continue;
+    }
     if (pitch_it == logical_lookup.end() || roll_it == logical_lookup.end()) {
       error_messages.push_back(
         "Parallel mechanism command is incomplete for " + group.spec.name);

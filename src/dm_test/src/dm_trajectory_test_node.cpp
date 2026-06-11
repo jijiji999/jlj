@@ -34,6 +34,11 @@ std::string read_required_string(const YAML::Node & node, const char * key)
 
 constexpr double kTimeEpsilon = 1e-9;
 
+bool contains_name(const std::vector<std::string> & names, const std::string & target)
+{
+  return std::find(names.begin(), names.end(), target) != names.end();
+}
+
 }  // namespace
 
 DmTrajectoryTestNode::DmTrajectoryTestNode()
@@ -160,11 +165,32 @@ std::string DmTrajectoryTestNode::resolve_path_relative_to_test_config(const std
   return (std::filesystem::path(test_config_path_).parent_path() / file_path).lexically_normal().string();
 }
 
+std::string DmTrajectoryTestNode::resolve_path_relative_to_humanoid_config(const std::string & path) const
+{
+  if (path.empty()) {
+    return path;
+  }
+
+  const std::filesystem::path file_path(path);
+  if (file_path.is_absolute()) {
+    return file_path.string();
+  }
+
+  return (std::filesystem::path(humanoid_config_path_).parent_path() / file_path)
+    .lexically_normal().string();
+}
+
 void DmTrajectoryTestNode::load_test_config()
 {
   const YAML::Node root = YAML::LoadFile(test_config_path_);
   motor_config_path_ = resolve_path_relative_to_test_config(
     read_required_string(root, "motor_config_path"));
+  humanoid_config_path_ = resolve_path_relative_to_test_config(
+    read_optional_value<std::string>(
+      root,
+      "humanoid_config_path",
+      std::string("package://dm_humanoid/config/dm_humanoid_29.yaml")));
+  load_parallel_mechanisms(YAML::LoadFile(humanoid_config_path_));
 
   const YAML::Node groups = root["groups"];
   if (!groups || !groups.IsMap()) {
@@ -423,12 +449,82 @@ void DmTrajectoryTestNode::load_csv_trajectory(const std::string & csv_path)
 void DmTrajectoryTestNode::validate_active_group_against_motor_config()
 {
   motor_configs_by_name_.clear();
-  for (const auto & joint_name : active_group_.joints) {
-    const auto config = manager_->motor_config(joint_name);
+  active_motor_names_ = resolve_motor_names_for_group();
+
+  for (const auto & motor_name : active_motor_names_) {
+    const auto config = manager_->motor_config(motor_name);
     if (!config.has_value()) {
-      throw std::runtime_error("joint in active group is missing from motor config: " + joint_name);
+      throw std::runtime_error("motor required by active group is missing from motor config: " + motor_name);
     }
-    motor_configs_by_name_[joint_name] = *config;
+    motor_configs_by_name_[motor_name] = *config;
+  }
+}
+
+std::vector<std::string> DmTrajectoryTestNode::resolve_motor_names_for_group() const
+{
+  std::vector<std::string> motor_names;
+
+  const auto add_motor = [&motor_names](const std::string & name) {
+    if (!contains_name(motor_names, name)) {
+      motor_names.push_back(name);
+    }
+  };
+
+  for (const auto & joint_name : active_group_.joints) {
+    if (!parallel_adapter_.is_parallel_joint(joint_name)) {
+      add_motor(joint_name);
+    }
+  }
+
+  for (const auto & spec : parallel_mechanism_specs_) {
+    const bool has_pitch = contains_name(active_group_.joints, spec.pitch_joint_name);
+    const bool has_roll = contains_name(active_group_.joints, spec.roll_joint_name);
+    if (!has_pitch && !has_roll) {
+      continue;
+    }
+    if (!has_pitch || !has_roll) {
+      throw std::runtime_error(
+              "parallel mechanism " + spec.name + " requires both logical joints: " +
+              spec.pitch_joint_name + " and " + spec.roll_joint_name);
+    }
+    add_motor(spec.motor_1_name);
+    add_motor(spec.motor_2_name);
+  }
+
+  return motor_names;
+}
+
+void DmTrajectoryTestNode::load_parallel_mechanisms(const YAML::Node & root)
+{
+  parallel_adapter_ = dm_humanoid::ParallelJointAdapter {};
+  parallel_mechanism_specs_.clear();
+
+  const YAML::Node mechanisms = root["parallel_mechanisms"];
+  if (!mechanisms || !mechanisms.IsSequence()) {
+    return;
+  }
+
+  for (const auto & mechanism_node : mechanisms) {
+    dm_humanoid::ParallelMechanismSpec spec;
+    spec.name = read_optional_value<std::string>(mechanism_node, "name", std::string());
+    spec.pitch_joint_name = read_optional_value<std::string>(
+      mechanism_node, "pitch_joint", std::string());
+    spec.roll_joint_name = read_optional_value<std::string>(
+      mechanism_node, "roll_joint", std::string());
+    spec.motor_1_name = read_optional_value<std::string>(
+      mechanism_node, "motor_1", std::string());
+    spec.motor_2_name = read_optional_value<std::string>(
+      mechanism_node, "motor_2", std::string());
+    spec.config_path = resolve_path_relative_to_humanoid_config(
+      read_optional_value<std::string>(mechanism_node, "config_path", std::string()));
+
+    std::string error_message;
+    if (!parallel_adapter_.add_mechanism(spec, error_message)) {
+      throw std::runtime_error(
+              "failed to load parallel mechanism " + spec.name + ": " + error_message);
+    }
+
+    parallel_mechanism_specs_.push_back(std::move(spec));
   }
 }
 
@@ -436,7 +532,7 @@ void DmTrajectoryTestNode::start_test_session()
 {
   if (auto_enable_on_start_) {
     const auto results = manager_->enable_motors(
-      active_group_.joints,
+      active_motor_names_,
       std::chrono::milliseconds(command_timeout_ms_));
     log_command_results(results);
   } else {
@@ -462,6 +558,13 @@ void DmTrajectoryTestNode::start_test_session()
     }
     oss << active_group_.joints[index];
   }
+  oss << " motors=";
+  for (size_t index = 0; index < active_motor_names_.size(); ++index) {
+    if (index > 0U) {
+      oss << ",";
+    }
+    oss << active_motor_names_[index];
+  }
   RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
 }
 
@@ -472,7 +575,7 @@ void DmTrajectoryTestNode::stop_test_session()
   }
 
   const auto results = manager_->disable_motors(
-    active_group_.joints,
+    active_motor_names_,
     std::chrono::milliseconds(command_timeout_ms_));
   log_command_results(results);
 }
@@ -576,6 +679,9 @@ void DmTrajectoryTestNode::timer_callback()
     }
 
     sampled = sample_trajectory(sample_time);
+    for (auto & velocity : sampled.velocities) {
+      velocity *= playback_speed_;
+    }
   }
   std::vector<double> target_positions;
   std::vector<double> target_velocities;
@@ -691,8 +797,8 @@ std::vector<dm_motor::NamedMitCommand> DmTrajectoryTestNode::build_commands(
   std::vector<double> & target_positions,
   std::vector<double> & target_velocities)
 {
-  std::vector<dm_motor::NamedMitCommand> commands;
-  commands.reserve(active_group_.joints.size());
+  std::vector<dm_humanoid::LogicalJointCommand> logical_commands;
+  logical_commands.reserve(active_group_.joints.size());
   target_positions.clear();
   target_positions.reserve(active_group_.joints.size());
   target_velocities.clear();
@@ -700,18 +806,26 @@ std::vector<dm_motor::NamedMitCommand> DmTrajectoryTestNode::build_commands(
 
   for (size_t joint_index = 0; joint_index < active_group_.joints.size(); ++joint_index) {
     const auto & joint_name = active_group_.joints[joint_index];
-    const auto & motor_config = motor_configs_by_name_.at(joint_name);
+    const auto maybe_logical_limits = parallel_adapter_.joint_limits(joint_name);
     const auto unclamped_position = active_trajectory_.use_absolute_positions ?
       sample.offsets[joint_index] :
       initial_positions_by_name_.at(joint_name) + sample.offsets[joint_index];
+    const double position_min = maybe_logical_limits.has_value() ?
+      static_cast<double>(maybe_logical_limits->first) :
+      static_cast<double>(motor_configs_by_name_.at(joint_name).limits.position_min);
+    const double position_max = maybe_logical_limits.has_value() ?
+      static_cast<double>(maybe_logical_limits->second) :
+      static_cast<double>(motor_configs_by_name_.at(joint_name).limits.position_max);
+    const auto velocity_limits_motor_name = motor_name_for_state(joint_name);
+    const auto & velocity_limits_config = motor_configs_by_name_.at(velocity_limits_motor_name);
     const double position = std::clamp(
       unclamped_position,
-      static_cast<double>(motor_config.limits.position_min),
-      static_cast<double>(motor_config.limits.position_max));
+      position_min,
+      position_max);
     const double velocity = std::clamp(
       sample.velocities[joint_index],
-      static_cast<double>(motor_config.limits.velocity_min),
-      static_cast<double>(motor_config.limits.velocity_max));
+      static_cast<double>(velocity_limits_config.limits.velocity_min),
+      static_cast<double>(velocity_limits_config.limits.velocity_max));
 
     if (std::abs(position - unclamped_position) > 1e-6) {
       RCLCPP_WARN_THROTTLE(
@@ -730,9 +844,24 @@ std::vector<dm_motor::NamedMitCommand> DmTrajectoryTestNode::build_commands(
     command.kd = static_cast<float>(gain.kd);
     command.torque = 0.0F;
 
-    commands.push_back(dm_motor::NamedMitCommand {joint_name, command});
+    logical_commands.push_back(dm_humanoid::LogicalJointCommand {joint_name, command});
     target_positions.push_back(position);
     target_velocities.push_back(velocity);
+  }
+
+  std::vector<dm_motor::NamedMitCommand> commands;
+  std::vector<std::string> translation_errors;
+  const bool translated = parallel_adapter_.translate_joint_commands(
+    logical_commands,
+    commands,
+    translation_errors);
+  for (const auto & error : translation_errors) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "%s", error.c_str());
+  }
+  if (!translated) {
+    commands.clear();
   }
 
   return commands;
@@ -741,8 +870,52 @@ std::vector<dm_motor::NamedMitCommand> DmTrajectoryTestNode::build_commands(
 void DmTrajectoryTestNode::update_latest_states()
 {
   (void)manager_->poll_once(std::chrono::milliseconds(0));
+  const auto previous_states_by_name = latest_states_by_name_;
+  raw_states_by_name_.clear();
   for (const auto & state : manager_->snapshot_states()) {
-    latest_states_by_name_[state.name] = state;
+    raw_states_by_name_[state.name] = state;
+  }
+
+  latest_states_by_name_ = raw_states_by_name_;
+  std::vector<dm_motor::MotorState> raw_states;
+  raw_states.reserve(raw_states_by_name_.size());
+  for (const auto & [name, state] : raw_states_by_name_) {
+    (void)name;
+    raw_states.push_back(state);
+  }
+
+  std::unordered_map<std::string, dm_humanoid::LogicalJointState> previous_logical_states;
+  previous_logical_states.reserve(previous_states_by_name.size());
+  for (const auto & [name, state] : previous_states_by_name) {
+    previous_logical_states[name] = dm_humanoid::LogicalJointState {
+      name,
+      state.position,
+      state.velocity,
+      state.torque,
+      state.valid
+    };
+  }
+
+  std::unordered_map<std::string, dm_humanoid::LogicalJointState> logical_states;
+  std::vector<std::string> errors;
+  (void)parallel_adapter_.rebuild_joint_states(
+    raw_states,
+    previous_logical_states,
+    logical_states,
+    errors);
+  for (const auto & error : errors) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "%s", error.c_str());
+  }
+  for (const auto & [name, logical_state] : logical_states) {
+    dm_motor::MotorState state;
+    state.name = name;
+    state.position = logical_state.position;
+    state.velocity = logical_state.velocity;
+    state.torque = logical_state.effort;
+    state.valid = logical_state.valid;
+    latest_states_by_name_[name] = state;
   }
 }
 
@@ -751,9 +924,21 @@ void DmTrajectoryTestNode::update_latest_states_from_results(
 {
   for (const auto & result : results) {
     if (result.state.has_value()) {
-      latest_states_by_name_[result.name] = *result.state;
+      raw_states_by_name_[result.name] = *result.state;
     }
   }
+  update_latest_states();
+}
+
+std::string DmTrajectoryTestNode::motor_name_for_state(const std::string & joint_name) const
+{
+  for (const auto & spec : parallel_mechanism_specs_) {
+    if (joint_name == spec.pitch_joint_name || joint_name == spec.roll_joint_name) {
+      return spec.motor_1_name;
+    }
+  }
+
+  return joint_name;
 }
 
 void DmTrajectoryTestNode::publish_tracking_messages(

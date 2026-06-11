@@ -9,8 +9,18 @@
 - 左腿 / 右腿 / 腰部 / 整机分组预留
 - 基于当前姿态的小幅相对轨迹跟踪
 - 外部 CSV 轨迹跟踪
+- 全身逻辑关节轨迹到三组并联机构电机命令的自动解算
 - 可调轨迹播放速度
 - 参考轨迹、实际反馈、跟踪误差发布
+
+## 0. 外部资源位置
+
+当前机器人模型和动作文件统一放在：
+
+- MJCF: `/home/sliouzhou04/jlj/JLJBot_mjcf/JLJBot/JLJBot.xml`
+- MJCF scene: `/home/sliouzhou04/jlj/JLJBot_mjcf/JLJBot/scene_29dof.xml`
+- URDF: `/home/sliouzhou04/jlj/JLJBot/JLJBot/JLJBot.urdf`
+- 动作 CSV/PKL: `/home/sliouzhou04/jlj/pkl`
 
 ## 1. 编译
 
@@ -48,7 +58,7 @@ ros2 launch dm_test arm_trajectory_test.launch.py \
 
 这条轨迹来自：
 
-- `/home/sliouzhou04/jlj/JLJBot_mjcf (1)/JLJBot_mjcf (3)/JLJBot/JLJBot.xml`
+- `/home/sliouzhou04/jlj/JLJBot_mjcf/JLJBot/JLJBot.xml`
 
 对应 CSV：
 
@@ -91,7 +101,60 @@ ros2 launch dm_test arm_trajectory_test.launch.py \
 - `dm_test/error_joint_states`
   跟踪误差
 
-## 8. 轨迹效果评估
+## 8. 启动全身走路轨迹测试
+
+当前已经把外部 `zoulu.csv` 转成包内测试轨迹：
+
+- `config/whole_body_zoulu.csv`
+
+源文件位置：
+
+- `/home/sliouzhou04/jlj/pkl/zoulu.csv`
+
+这条轨迹来自原始文件的 29 个逻辑关节角，原始帧率是 `30 FPS`，根节点位姿没有下发给电机。
+
+全身轨迹里的并联机构关节使用逻辑关节名：
+
+- `waist_roll` / `waist_pitch`
+- `left_ankle_pitch` / `left_ankle_roll`
+- `right_ankle_pitch` / `right_ankle_roll`
+
+`dm_trajectory_test_node` 会读取 `dm_humanoid/config/dm_humanoid_29.yaml` 里的三组 `parallel_mechanisms` 配置，发送前自动把这三组 pitch/roll 目标逆解成：
+
+- `waist_parallel_1` / `waist_parallel_2`
+- `left_ankle_parallel_1` / `left_ankle_parallel_2`
+- `right_ankle_parallel_1` / `right_ankle_parallel_2`
+
+同时，`dm_test/reference_joint_states`、`dm_test/actual_joint_states` 和 `dm_test/error_joint_states` 发布的仍然是逻辑关节空间，方便直接看 `waist_pitch/roll` 和 `ankle_pitch/roll` 的跟踪误差。
+
+如果 `/home/sliouzhou04/jlj/pkl/zoulu.csv` 更新了，可以重新生成包内测试 CSV：
+
+```bash
+python3 /home/sliouzhou04/jlj_ws/src/dm_test/scripts/convert_whole_body_csv.py \
+  --source /home/sliouzhou04/jlj/pkl/zoulu.csv \
+  --output /home/sliouzhou04/jlj_ws/src/dm_test/config/whole_body_zoulu.csv \
+  --fps 30
+```
+
+第一次测试建议非常慢：
+
+```bash
+export ROS_LOG_DIR=/tmp/roslog_dm_test
+ros2 launch dm_test whole_body_trajectory_test.launch.py \
+  playback_speed:=0.05 \
+  pre_position_duration_sec:=15.0 \
+  command_rate_hz:=100.0
+```
+
+如果确认动作方向和幅度都正常，再逐步调大：
+
+```bash
+playback_speed:=0.1
+```
+
+`playback_speed` 控制轨迹播放速度，`0.05` 表示原始速度的二十分之一。控制节点会先把全身关节从当前反馈位置缓慢移动到轨迹第一帧，再开始正式跟踪。
+
+## 9. 轨迹效果评估
 
 建议录制这些话题：
 
@@ -127,7 +190,7 @@ python3 /home/sliouzhou04/jlj_ws/src/dm_test/scripts/evaluate_tracking.py \
 
 - `scripts/example_error_joint_states.csv`
 
-## 9. 实时画轨迹曲线
+## 10. 实时画轨迹曲线
 
 现在也可以实时画每个左臂电机的：
 
@@ -173,7 +236,7 @@ python3 /home/sliouzhou04/jlj_ws/src/dm_test/scripts/realtime_plot_tracking.py \
 - 这需要本机 Python 环境里有 `matplotlib`
 - 最适合一边跑 `dm_test`，一边开一个新终端实时看曲线
 
-## 10. 用 CSV 跑左臂轨迹
+## 11. 用 CSV 跑左臂轨迹
 
 如果你已经有一个左臂 CSV 文件，可以直接传给 launch：
 
@@ -220,7 +283,7 @@ csv_row_rate_hz:=30.0
 
 这表示 CSV 每一行相当于原始轨迹的 `1/30` 秒。
 
-## 11. CSV 格式要求
+## 12. CSV 格式要求
 
 默认测试配置文件：
 
@@ -245,7 +308,7 @@ csv_row_rate_hz:=30.0
 time_column_name:=timestamp
 ```
 
-## 12. 轨迹配置说明
+## 13. 轨迹配置说明
 
 配置思路：
 
